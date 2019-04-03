@@ -1,0 +1,304 @@
+Create Or Replace function woseDiffACE()
+Returns Long VarChar
+Begin
+	/*CONST
+	CONST*/
+	DIM Long VarChar = lHTML, lorig1, lOrig2, lDocName, lDocDate ;
+	DIM Integer = la, lCount, lCode ;
+	WebVars a:0, code:21242 ;
+	
+	select Replace(Replace(source, '<', '&lt;'), '>', '&gt;') into lOrig1
+	from wosedoc where codedoc=21242 ;
+	select Replace(Replace(source, '<', '&lt;'), '>', '&gt;')  into lOrig2
+	from wosedoc where codedoc=21579;
+
+	if la = 1 then 
+    	select source, docname, docdate into lHTML, lDocName, lDocDate
+    	from wosedoc where codedoc=lcode;
+	    return csconvert(lHTML, 'UTF-8') ;
+	elseif la = 2 then 
+    	select source into lHTML
+    	from wosedoc where codedoc=lcode;
+	    return csconvert(lHTML, 'UTF-8') ;
+	end if ;
+
+	select source, docname, docdate into lHTML, lDocName, lDocDate from wosedoc where codedoc=lcode ;
+
+	Set lHTML = fnsel('Select d.codedoc code, d.docdate data From wosedoc d join wosedoc doc on doc.docname=d.docname and doc.doctype=d.doctype where doc.codedoc = <%lCode%> Order By d.DocDate desc ', 'codeDoc', lCode) ;
+
+
+
+	set lhtml = '<!DOCTYPE html>
+<html>
+<head>
+    <title>merge demo</title>
+    <meta charset="utf-8">
+    <link rel=stylesheet href="merge.css">
+    <script src="ace.js"></script>
+    <script src="jquery-1.7.2.min.js"></script>
+    //<script src="apacheJS.js"></script>
+    <script src="diff_match_patch.js"></script>
+    <script src="merge.js"></script>
+    <style>
+        span.clicky {
+            cursor: pointer;
+            background: #d70;
+            color: white;
+            padding: 0 3px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+<div id="topMenu" style="color:wheat;">
+    Comparateur de versions pour <b><%lDocName%></b>, version du <i><%lDocDate%></i> : versus la version du : <%lHTML%>
+</div>
+<div id=view>
+
+
+</div>
+<textarea id="tx1" style="display:none;"><%lorig1%>"</textarea>
+<textarea id="tx2" style="display:none;"><%lorig2%></textarea>
+/*
+<span class="clicky" onclick="initUI(2)">two-way</span>
+
+<span class="clicky" onclick="initUI(3)">three-way</span>
+*/
+<script>
+    function localAjax(pUrl, cBack, cErr, cTO) {
+    	if( pUrl != undefined && pUrl != "" ){
+    		myURL = pUrl ;
+    		var URL = "" ;
+    		try{var n = pUrl.indexOf("?") }catch(err){n=-2};
+    		if(n>0) {
+    				URL = pUrl.substring(n+1,pUrl.length);
+    				pUrl = pUrl.substring(0, n);
+    			}
+    		var xhr=null;
+    		if(window.XMLHttpRequest) xhr=new XMLHttpRequest();else if (window.ActiveXObject) xhr=new ActiveXObject("Microsoft.XMLHTTP");
+    		xhr.open("POST", pUrl, true);
+    
+    		xhr.onerror = xhr.onabort = function() {
+    			return "" ;
+    		};
+    
+    		xhr.onreadystatechange=function() {
+    			if ( xhr.readyState==4 ) {
+    				var ltemp = xhr.responseText ;
+    				if (cBack!=undefined) {cBack(ltemp)} else {return ltemp} ;
+    			} ;
+    			return "" ;
+    		}
+    
+    		xhr.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+    		xhr.send(URL) ;
+    		if(cErr!=undefined) {
+    			if(cTO==undefined) {cTO=5000} ;
+    			xhr.timeout = cTO ;
+    			xhr.ontimeout=function(){
+    				cErr("timeout : "+myURL)
+    			}
+    		}
+    	} else {
+    		alert("syntax = localAjax(URL [, CallBack] )")
+    	}
+    } ;
+</script>
+<script>
+    var value, orig1, orig2, dv;
+    ace.config.set("basePath","./lib/ace-editor");
+    function initUI(panes) {
+        if (value == null) return;
+        var target = document.getElementById("view");
+        target.innerHTML = "";
+        MergeView(target, {
+            value: value,
+            origLeft: panes == 3  ? orig1 : null,
+            orig: orig2,
+            mode: "html"
+        });
+    }
+
+    window.onload = function() {
+        /*
+        value = tx1.innerText;
+        orig1 = tx2.value;
+        orig2 = tx2.value;
+        initUI(2);
+        */
+        loadVersion(<%lCode%>, 1)
+        obj = document.querySelector("#fnSelcodeDoc")
+        obj.selectedIndex = 3
+        var code=obj.options[obj.selectedIndex].value
+        loadVersion(code, 2)
+    };
+
+
+</script>
+<script>
+    function selectChanged(v,i,n) {
+        loadVersion(i, 2)
+    }
+    
+    function loadVersion(cd, dst) {
+        url="?a=1&code="+cd
+        console.log(url)
+        localAjax(url, function(v){
+            tx2.value=v;
+            if(dst==1) {
+                value = tx2.value
+            } else {
+                orig2 = tx2.value
+                initUI(2);
+            }
+        })
+    }
+
+</script>
+
+
+</body>
+</html>';
+	Return csconvert(lHTML, 'UTF-8') ;
+End
+
+/*
+Create Or Replace function woseDiffACE()
+Returns Long VarChar
+Begin
+	DIM Long VarChar = lHTML, lDocName, lDocDate ;
+	DIM Integer = la, lCount, lCode ;
+	WebVars a:0,  code:21242 ;
+	
+	if la = 1 then 
+    	select source, docname, docdate into lHTML, lDocName, lDocDate
+    	from wosedoc where codedoc=lcode;
+	    return csconvert(lHTML, 'UTF-8') ;
+	elseif la = 2 then 
+    	select source into lHTML
+    	from wosedoc where codedoc=lcode;
+	    return csconvert(lHTML, 'UTF-8') ;
+	end if ;
+
+	select source, docname, docdate into lHTML, lDocName, lDocDate from wosedoc where codedoc=lcode;
+
+	Set lHTML = fnsel('Select d.codedoc code, d.docdate data From wosedoc d join wosedoc doc on doc.docname=d.docname and doc.doctype=d.doctype where doc.codedoc = <%lCode%> Order By d.DocDate desc ', 'codeDoc', lCode) ;
+
+	set lhtml = '<!DOCTYPE html>
+<html>
+<head>
+    <title>merge demo</title>
+    <meta charset="utf-8">
+    <link rel=stylesheet href="merge.css">
+    <script src="ace.js"></script>
+    <script src="jquery-1.7.2.min.js"></script>
+    //<script src="apacheJS.js"></script>
+    <script src="diff_match_patch.js"></script>
+    <script src="merge.js"></script>
+    <style>
+        span.clicky {
+            cursor: pointer;
+            background: #d70;
+            color: white;
+            padding: 0 3px;
+            border-radius: 3px;
+        }
+    </style>
+    <script>
+        function $ajax(pUrl, cBack, cErr, cTO) {
+        	if( pUrl != undefined && pUrl != "" ){
+        		myURL = pUrl ;
+        		var URL = "" ;
+        		try{var n = pUrl.indexOf("?") }catch(err){n=-2};
+        		if(n>0) {
+        				URL = pUrl.substring(n+1,pUrl.length);
+        				pUrl = pUrl.substring(0, n);
+        			}
+        		var xhr=null;
+        		if(window.XMLHttpRequest) xhr=new XMLHttpRequest();else if (window.ActiveXObject) xhr=new ActiveXObject("Microsoft.XMLHTTP");
+        		xhr.open("POST", pUrl, true);
+        
+        		xhr.onerror = xhr.onabort = function() {
+        			return "" ;
+        		};
+        
+        		xhr.onreadystatechange=function() {
+        			if ( xhr.readyState==4 ) {
+        				var ltemp = xhr.responseText ;
+        				if (cBack!=undefined) {cBack(ltemp)} else {return ltemp} ;
+        			} ;
+        			return "" ;
+        		}
+        
+        		xhr.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+        		xhr.send(URL) ;
+        		if(cErr!=undefined) {
+        			if(cTO==undefined) {cTO=5000} ;
+        			xhr.timeout = cTO ;
+        			xhr.ontimeout=function(){
+        				cErr("timeout : "+myURL)
+        			}
+        		}
+        	} else {
+        		alert("syntax = $ajax(URL [, CallBack] )")
+        	}
+        } ;
+    </script>
+</head>
+<body>
+<div id="topMenu" style="color:wheat;">
+    Comparateur de versions pour <b><%lDocName%></b>, version du <i><%lDocDate%></i> : versus la version du : <%lHTML%>
+</div>
+<div id=view>
+
+
+</div>
+<script>
+    var value, orig1, orig2, dv;
+    ace.config.set("basePath","./lib/ace-editor");
+    function initUI(panes) {
+        if (value == null) return;
+        var target = document.getElementById("view");
+        target.innerHTML = "";
+        MergeView(target, {
+            value: value,
+            origLeft: panes == 3  ? orig1 : null,
+            orig: orig2,
+            mode: "html"
+        });
+    }
+    
+    function selectChanged(v,i,n) {
+        loadVersion(i, 2)
+    }
+    
+    function loadVersion(cd, dst) {
+        url="?a=1&code="+cd
+        console.log(url)
+        $ajax(url, function(v){
+            if(dst==1) {
+                value = v
+            } else {
+                orig2 = v
+                initUI(2);
+            }
+        })
+    }
+
+    window.onload = function() {
+        loadVersion(<%lCode%>, 1)
+        obj = document.querySelector("#fnSelcodeDoc")
+        obj.selectedIndex = 10
+        var code=obj.options[obj.selectedIndex].value
+        loadVersion(code, 2)
+        
+    };
+
+</script>
+
+
+</body>
+</html>';
+	Return csconvert(lHTML, 'UTF-8') ;
+End
+*/
