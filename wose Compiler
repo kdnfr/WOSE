@@ -1,0 +1,316 @@
+create function "DBA"."woseCompiler"( in @CodeDoc integer default 0,in @Mode integer default 0,in @HTML char(4096) default '' ) 
+returns long varchar
+begin
+  declare "lHTML","lHTML1","lHTML2","lPreComp","lPreComp1","lPreComp2","lBuffer","lBuf","lResult","lSource","lConstantes","lKonstantes","lkName","lTemp","lch" long varchar;
+  declare "lCodeDoc","lMode","lCount","lPos","lLength","nl","ln","ll","lNb","lastConstantValue","lMaxLen","ld","lf" integer;
+  set "lcodedoc" = "IsNull"("http_variable"('CodeDoc'),@CodeDoc);
+  set "lmode" = "IsNull"("http_variable"('mode'),@mode);
+  begin try
+    select "Source" into "lHTML" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+    if "isnull"("lHTML",'') = '' then
+      set "lHTML" = @HTML
+    end if;
+    set "lMaxLen" = "len"("lHTML");
+    set "nl" = 1;
+    set "ll" = 0;
+    set "lHTML" = "Replace"("Replace"("lHTML","Char"(13),"Char"(10)),"Char"(9),' ');
+    for "lbsp" as "cssp" dynamic scroll cursor for select * from "sa_rowgenerator"(1,9) order by "row_num" desc
+    do
+      set "lHTML" = "replace"("lHTML","repeat"(' ',"row_num"),' ')
+    end for;
+    while "Locate"("lHTML",' ' || ' ') > 0 loop
+      set "lHTML" = "Replace"("lHTML",' ' || ' ',' ')
+    end loop;
+    while "Locate"("lHTML","Char"(10) || ' ') > 0 loop
+      set "lHTML" = "Replace"("lHTML","Char"(10) || ' ',"Char"(10))
+    end loop;
+    while "Locate"("lHTML","Char"(10) || "Char"(10)) > 0 loop
+      set "lHTML" = "Replace"("lHTML","Char"(10) || "Char"(10),"Char"(10))
+    end loop;
+    set "lTemp" = "lHTML";
+    select "List"("w","Char"(10) order by "line_num" asc) into "lHTML"
+      from(select "line_num","Trim"("row_value") as "v",
+          if "Left"("v",4) = 'di' || 'm ' then
+            'Declare ' || "fnsplit"("Left"("v","len"("v")-1),2,'=') || ' ' || "Trim"("SubStr"("fnsplit"("v",1,'='),4)) || ' ;'
+          else
+            if "Left"("v",2) = '/' || '/' then
+              ''
+            else
+              "v"
+            endif
+          endif as "w"
+          from "sa_split_List"("lTemp","Char"(10))
+          where "w" <> '') as "vv";
+    select "k"
+      into "lkName"
+      from(select '/' || '*' || 'include' as "db",
+          'include' || '*' || '/' as "de",
+          "Locate"("lHTML","db") as "nl",
+          "Locate"("lHTML","de","nl") as "ln",
+          if "nl" > 0 and "ln"-"nl"-9 > 0 then "Trim"("SubStr"("lHTML","nl"+9,"ln"-"nl"-9)) else '' endif as "k") as "kk";
+    if "lkName" <> '' then
+      select top 1 "Source" into "lKonstantes" from "WoseDoc" where "DocName" = "lkName" and "DocEnd" is null and "DocType" = 'include' order by "DocDate" desc
+    end if;
+    if "IsNull"("lKonstantes",'') <> '' then
+      select "k","nb" into "lConstantes","lNb"
+        from(select '/' || '*' || 'const' as "db",
+            'const' || '*' || '/' as "de",
+            "Locate"("lKonstantes","db") as "nl",
+            "Locate"("lKonstantes","de","nl") as "ln",
+            if "nl" > 0 and "ln"-"nl"-7 >= 0 then "Trim"("SubStr"("lKonstantes","nl"+7,"ln"-"nl"-7)) else '' endif as "k",
+            if "nl" > 0 and "k" <> '' then "fnsplit"("Replace"("k",';;','~~'),0,';') else 0 endif as "nb") as "kk"
+    end if;
+    set "nl" = 1;
+    set "ll" = 0;
+    while "nl" > 0 loop
+      set "lKonstantes" = '';
+      select "Trim"("k"),"nb","lnl" into "lKonstantes","lNb","nl"
+        from(select '/' || '*' || 'const' as "db",
+            'const' || '*' || '/' as "de",
+            "Locate"("lHTML","db","nl"+1) as "lnl",
+            "Locate"("lHTML","de","lnl") as "ln",
+            if "lnl" > 0 and "ln"-"lnl"-7 >= 0 then "Trim"("SubStr"("lHTML","lnl"+7,"ln"-"lnl"-7)) else '' endif as "k",
+            if "lnl" > 0 and "k" <> '' then "fnsplit"("Replace"("k",';;','~~'),0,';') else 0 endif as "nb") as "kk";
+      if "nl" > 0 then
+        for "lblk" as "cslk" dynamic scroll cursor for
+          select "Trim"("fnsplit"("lKonstantes","row_num","Char"(10))) as "lk" from "sa_rowgenerator"(1,"fnsplit"("lKonstantes",0,"Char"(10)))
+        do
+          if "Left"("lk",7) = 'Select ' then
+            if "Right"("lk",1) = ';' then set "lk" = "Left"("lk","len"("lk")-1) end if;
+            execute immediate 'Set lk = (' || "Replace"("Replace"("lk",'<' || '%','''||'),'%' || '>','||''') || ')'
+          end if;
+          set "lConstantes" = "lConstantes" || "lk" || "Char"(10)
+        end for
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "Loop" end if
+    end loop;
+    if "lMode" = 104 then
+      return "lConstantes" || ';lConstantes.length=' || "ll" || '.'
+    end if;
+    set "nl" = 1;
+    "lbcmt": while "nl" > 0 loop
+      select "ll","ln" into "nl","ln"
+        from(select "Locate"("lHTML",'/' || '*') as "nl",
+            "Locate"("lHTML",'*' || '/',"nl"+2) as "ln",
+            "Locate"("lHTML",'/' || '*',"nl"+2) as "nnl",
+            if "nnl" < "ln" and "nnl" > "nl" then "nnl" else "nl" endif as "ll") as "nn";
+      if "nl" > 0 then
+        set "lHTML" = "Trim"("Left"("lHTML","nl"-1)) || "SubStr"("lHTML","ln"+2)
+      end if;
+      set "lHTML" = "Replace"("lHTML","Char"(10) || "Char"(10),"Char"(10))
+    end loop "lbcmt";
+    set "lHTML" = "Replace"("lHTML",'','££');
+    set "lCount" = 0;
+    "lbk00": for "lbk0" as "csk0" dynamic scroll cursor for
+      select "row_value" as "k" from "sa_split_List"("Replace"("lConstantes",';;','~~'),';') order by "line_num" asc
+    do
+      select "Trim"("Left"("k","Locate"("k",'=')-1)),"Trim"("SubStr"("k","Locate"("k",'=')+1)) into "lHTML1","lHTML2";
+      if "lHTML2" = '+' then
+        set "lastConstantValue" = "IsNull"("lastConstantValue",0)+1;
+        set "lHTML2" = cast("lastConstantValue" as char(32))
+      elseif "isnumeric"("lHTML2") = 1 and "lHTML2" > '0' then
+        set "lastConstantValue" = "floor"("lHTML2")
+      end if;
+      if "trim"("IsNull"("lHTML1",'')) <> '' and "trim"("IsNull"("lHTML2",'')) <> '' then
+        set "lHTML" = "Replace"("lHTML",'{' || "lHTML1" || '}',"lHTML2")
+      end if;
+      if "lCount" > 10000 then leave "lbk00" end if
+    end for;
+    set "lCount" = 0;
+    "lbk0": for "lbk" as "csk" dynamic scroll cursor for
+      select "row_value" as "k" from "sa_split_List"("Replace"("lConstantes",';;','~~'),';') order by "line_num" asc
+    do
+      select "Trim"("Left"("k","Locate"("k",'=')-1)),"Trim"("SubStr"("k","Locate"("k",'=')+1)) into "lHTML1","lHTML2";
+      if "lHTML2" = '+' then
+        set "lastConstantValue" = "IsNull"("lastConstantValue",0)+1;
+        set "lHTML2" = cast("lastConstantValue" as char(32))
+      elseif "isnumeric"("lHTML2") = 1 and "lHTML2" > '0' then
+        set "lastConstantValue" = "floor"("lHTML2")
+      end if;
+      if "len"("lHTML1") > 0 then
+        if "Locate"("lHTML1",',') > 0 then
+          set "nl" = 1;
+          set "lCount" = "lCount"+1;
+          set "lBuf" = '{' || "Trim"("fnsplit"("lHTML1",1,',')) || ',';
+          set "lKonstantes" = "fnMatch"("lHTML",1,"lBuf",'}');
+          set "lTemp" = "fnMatch"("lHTML",1,"lBuf",'}');
+          while "IsNull"("lTemp",'') <> '' loop
+            set "lBuffer" = "Left"("lTemp","len"("lTemp")-1);
+            set "lResult" = "lHTML2";
+            for "lbsk" as "csck" dynamic scroll cursor for
+              select "Trim"("fnsplit"("lBuffer","row_num",',')) as "rValue","Trim"("fnsplit"("lHTML1","row_num",',')) as "rName" from "sa_rowgenerator"(2,"fnsplit"("lBuffer",0,','))
+            do
+              set "lResult" = "Replace"("lResult",'[' || "rName" || ']',"rValue")
+            end for;
+            set "lHTML" = "Replace"("lHTML","lTemp","Replace"("lResult",'~~',';'));
+            set "lTemp" = "fnMatch"("lHTML",1,"lBuf",'}');
+            if "lCount" > 10000 then leave "Loop" end if
+          end loop
+        else
+          if "trim"("IsNull"("lHTML1",'')) <> '' and "trim"("IsNull"("lHTML2",'')) <> '' then
+            set "lHTML" = "Replace"("lHTML",'{' || "lHTML1" || '}',"lHTML2")
+          end if
+        end if
+      end if;
+      if "lCount" > 10000 then leave "lbk0" end if
+    end for;
+    set "lPreComp" = "Replace"("lHTML",'''''','..');
+    for "lbk1" as "csk1" dynamic scroll cursor for
+      select "row_value" as "k" from "sa_split_List"("Replace"("lConstantes",';;','~~'),';') order by "line_num" asc
+    do
+      select "Trim"("Left"("k","Locate"("k",'=')-1)),"Trim"("SubStr"("k","Locate"("k",'=')+1)) into "lHTML1","lHTML2";
+      if "lHTML2" = '+' then
+        set "lastConstantValue" = "IsNull"("lastConstantValue",0)+1;
+        set "lHTML2" = cast("lastConstantValue" as char(32))
+      elseif "isnumeric"("lHTML2") = 1 and "lHTML2" > '0' then
+        set "lastConstantValue" = "floor"("lHTML2")
+      end if;
+      if "trim"("IsNull"("lHTML1",'')) <> '' and "trim"("IsNull"("lHTML2",'')) <> '' then
+        set "lHTML" = "Replace"("lHTML",'{' || "lHTML1" || '}',"lHTML2")
+      end if
+    end for;
+    set "lHTML" = "Replace"("lHTML",'££','');
+    set "lPreComp" = "Replace"("lHTML",'''''','..');
+    set "nl" = 1;
+    "lb0": while "nl" > 0 loop
+      set "nl" = "Locate"("lPreComp",'''',"nl"+1);
+      if "nl" > 0 then
+        set "ln" = "Locate"("lPreComp",'''',"nl"+1);
+        if "ln" > "nl" then
+          set "lPreComp" = "Left"("lPreComp","nl"-1) || "repeat"('.',"ln"-"nl"+1) || "SubStr"("lPreComp","ln"+1)
+        end if
+      else
+        leave "lb0"
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "lb0" end if
+    end loop "lb0";
+    set "nl" = 1;
+    "lb00": while "nl" > 0 loop
+      set "nl" = "Locate"("lPreComp",'"',"nl"+1);
+      if "nl" > 0 then
+        set "ln" = "Locate"("lPreComp",'"',"nl"+1);
+        if "ln" > "nl" then
+          set "lPreComp" = "Left"("lPreComp","nl"-1) || "repeat"('.',"ln"-"nl"+1) || "SubStr"("lPreComp","ln"+1)
+        end if
+      else
+        leave "lb00"
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "lb00" end if
+    end loop "lb00";
+    set "nl" = 1;
+    set "ll" = 0;
+    "lb12": while "nl" > 0 loop
+      select "Locate"("lPreComp","Char"(10) || 'glob' || 'al') as "lnl",
+        "Left"("lPreComp","lnl") as "sp1",
+        "SubStr"("lPreComp","lnl"+9+"lln") as "sp2",
+        "Left"("lHTML","lnl") as "sh1",
+        "SubStr"("lHTML","lnl"+9+"lln") as "sh2",
+        "SubStr"("lPreComp","lnl"+8) as "buf",
+        "Left"("buf","Locate"("buf",';')-1) as "sbuf",
+        "len"("sBuf") as "lln"
+        into "nl","lPreComp1","lPreComp2","lHTML1","lHTML2","lBuf","lBuffer","ln";
+      if "nl" > 0 and "ln" > 0 then
+        set "lBuffer" = "Left"("lBuffer","Locate"("lBuffer" || ';',';')-1);
+        select "List"("s3","Char"(10) order by "line_num" asc)
+          into "lResult"
+          from(select "fnsplit"("lBuffer",'1','=') as "lTypeVar",
+              "Char"(10) || 'If VarExists(''' || "Trim"("row_value") || ''') = 0 Then Create Variable ' || "Trim"("row_value") || ' ' || "lTypeVar" || ' ; EndIf ; ' as "s3",
+              "line_num"
+              from "sa_split_List"("fnsplit"("lBuffer",'2','='))) as "wv";
+        set "lHTML" = "lHTML1" || "lResult" || "lHTML2";
+        set "lPreComp" = "lPreComp1" || "lResult" || "lPreComp2"
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "lb12" end if
+    end loop "lb12";
+    set "nl" = 1;
+    set "ll" = 0;
+    "lb1": while "nl" > 0 loop
+      set "lPreComp" = "lHTML";
+      select "Locate"("lPreComp",'web' || 'varsde',"nl"+1) as "lnl",
+        "SubStr"("lPreComp","lnl"+9,1) as "ch",
+        "Left"("lPreComp","lnl"-1) as "sp1",
+        "SubStr"("lPreComp","lnl"+12+"ln") as "sp2",
+        "Left"("lHTML","lnl"-1) as "sh1",
+        "SubStr"("lHTML","lnl"+12+"ln") as "sh2",
+        "Trim"("SubStr"("lPreComp","lnl"+11)) as "buf",
+        "Left"("buf","Locate"("buf",';')-1) as "sbuf",
+        "len"("sBuf") as "ln"
+        into "nl","lch","lPreComp1","lPreComp2","lHTML1","lHTML2","lBuf","lBuffer","ln";
+      if "nl" > 0 and "ln" > 0 and "lch" = 'c' then
+        select "List"("s3","Char"(10) order by "line_num" asc)
+          into "lResult"
+          from(select "row_value" as "v",
+              "fnsplit"("v",0,':') as "s0",
+              "Trim"("fnsplit"("v",1,':')) as "s1",
+              "Trim"("fnsplit"("v",2,':')) as "s2",
+              if "Trim"("s2") = '@' then '@' || "s1" else "s2" endif as "s22",
+              'Set l' || "Trim"("lcase"("s1")) || '=' || if "s0" > 1 then 'IsNull(http_decode(http_variable(''' || "Trim"("s1") || ''')), ' || "s22" || ')' else 'http_decode(http_variable(''' || "Trim"("s1") || '''))' endif || ';' as "s3",
+              "line_Num"
+              from "sa_split_List"("lBuffer")) as "wv";
+        set "lHTML" = "lHTML1" || "lResult" || "lHTML2";
+        set "lPreComp" = "lPreComp1" || "repeat"('.',"len"("lResult")) || "lPreComp2"
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "lb1" end if
+    end loop "lb1";
+    set "nl" = 1;
+    set "ll" = 0;
+    "lb11": while "nl" > 0 loop
+      set "lPreComp" = "lHTML";
+      select "Locate"("lPreComp",'web' || 'var',"nl"+1) as "lnl",
+        "SubStr"("lPreComp","lnl"+6,1) as "ch",
+        "Left"("lPreComp","lnl"-1) as "sp1",
+        "SubStr"("lPreComp","lnl"+9+"ln") as "sp2",
+        "Left"("lHTML","lnl"-1) as "sh1",
+        "SubStr"("lHTML","lnl"+9+"ln") as "sh2",
+        "Trim"("SubStr"("lPreComp","lnl"+8)) as "buf",
+        "Left"("buf","Locate"("buf",';')-1) as "sbuf",
+        "len"("sBuf") as "ln"
+        into "nl","lch","lPreComp1","lPreComp2","lHTML1","lHTML2","lBuf","lBuffer","ln";
+      if "nl" > 0 and "ln" > 0 and "lch" = 's' then
+        select "List"("s3","Char"(10) order by "line_num" asc)
+          into "lResult"
+          from(select "row_value" as "v",
+              "fnsplit"("v",0,':') as "s0",
+              "Trim"("fnsplit"("v",1,':')) as "s1",
+              "Trim"("fnsplit"("v",2,':')) as "s2",
+              if "Trim"("s2") = '@' then '@' || "s1" else "s2" endif as "s22",
+              'Set l' || "Trim"("lcase"("s1")) || '=' || if "s0" > 1 then 'IsNull(http_variable(''' || "Trim"("s1") || '''), ' || "s22" || ')' else 'http_variable(''' || "Trim"("s1") || ''')' endif || ';' as "s3",
+              "line_Num"
+              from "sa_split_List"("lBuffer")) as "wv";
+        set "lHTML" = "lHTML1" || "lResult" || "lHTML2";
+        set "lPreComp" = "lPreComp1" || "repeat"('.',"len"("lResult")) || "lPreComp2"
+      end if;
+      set "ll" = "ll"+1;
+      if "ll" > 10000 then leave "lb11" end if
+    end loop "lb11";
+    set "nl" = 1;
+    "lbcmt": while "nl" > 0 loop
+      select "ll","ln" into "nl","ln"
+        from(select "Locate"("lHTML",'/' || '*') as "nl",
+            "Locate"("lHTML",'*' || '/',"nl"+2) as "ln",
+            "Locate"("lHTML",'/' || '*',"nl"+2) as "nnl",
+            if "nnl" < "ln" and "nnl" > "nl" then "nnl" else "nl" endif as "ll") as "nn";
+      if "nl" > 0 then
+        set "lHTML" = "Trim"("Left"("lHTML","nl"-1)) || "SubStr"("lHTML","ln"+2)
+      end if;
+      set "lHTML" = "Replace"("lHTML","Char"(10) || "Char"(10),"Char"(10))
+    end loop "lbcmt";
+    set "nl" = 10;
+    "lbcmt": while "nl" > 0 loop
+      set "lHTML" = "Replace"("lHTML",'<' || '%',''' ||');
+      set "lHTML" = "Replace"("lHTML",'%' || '>','|| ''');
+      set "nl" = "nl"-1
+    end loop "lbcmt";
+    set "lHTML" = "Replace"("lHTML",'#' || 'Join','left Outer Join');
+    set "lHTML" = "Replace"("lHTML",'Join' || '#','Right Outer Join')
+  end try
+  begin catch
+    set "lHTML" = 'Erreur sur =' || "ERROR_procedure"() || ', ligne ' || "error_line"() || ' : ' || "ERROR_message"() || '.'
+  end catch;
+  return "lHTML"
+end
