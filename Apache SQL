@@ -1,0 +1,36 @@
+Create Or Replace function apacheSQL()
+Returns Long VarChar
+Begin
+	/*CONST
+	    validate = 101 ;
+	    changeLog = 109 ;
+	CONST*/
+	DIM Long VarChar = lHTML ;
+	DIM Integer = la, lCount, lCode ;
+	WebVars a:0 ;
+	
+	case la
+	when {validate} then
+	    set lHTML = 'Validation En cours'
+	    
+	when {changeLog} then
+	    set lHTML = '<table>
+	                    <tr>
+	                        <th>Login : </th>
+	                        <td><input autofocus autocomplete="off" type="text" spaceholder="votre mail jusqu''au signe @" oninput="changeLog(1, this)" onkeydown="changeLog(1, this)" onchange="changeLog(1, this)"/></td>
+	                    </tr> 
+    	                <tr>
+    	                    <th>Mot de passe: </th>
+    	                    <td><input autocomplete="off" type="text" spaceholder="votre mail jusqu''au signe @" oninput="changeLog(2, this)" onkeydown="changeLog(2, this)" onchange="changeLog(2, this)"/> </td>
+    	               </tr>
+    	               <tr>
+        	                <td><button onclick="changeLog(9)">quitter</button></td>
+        	                <td><button onclick="changeLog(3)">validez</button></td>
+    	               </tr>
+	                </table>' ;
+	else
+	
+	end ;
+
+	Return csconvert(lHTML, 'UTF-8') ;
+End
