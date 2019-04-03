@@ -1,0 +1,530 @@
+create function "DBA"."WoseDoc"( in @CodeDoc integer default 0,in @a integer default 0 ) 
+returns long varchar
+begin
+  declare "lHTML","lSource","lComp","lConstantes","lTestURL","lWorkList","lSQL","lSQL1","lSQL2","lSQL3","lSQL4","lSQL5","lSQL6","lSQL7","lProjets","lTemp" long varchar;
+  declare "lDocName","lDocType","lInclude","lIncluder","lEditorContext","lOrigin" long varchar;
+  declare "lTypeWoseDoc","lFileName","lFileType","lFileDType","lFiltreDocuments","lTableName","lsessionUID","lastCat","lColor" char(255);
+  declare "la","lobk","nl","ln","lCodeDoc","lCodeDocGrp","lCodeProjet","lCount","lLength","lsqlmsg","lgfs","lOrigine","lcodeType","typeWoseDoc","lCodeProjectDescription","lBrouillon","lwo","lEditingMode","lOpenDocByUser" integer;
+  set "la" = "IsNull"("http_variable"('a'),@a);
+  set "lbrouillon" = "IsNull"("http_variable"('brouillon'),1);
+  set "lsource" = "IsNull"("http_variable"('Source'),'');
+  set "lcodedoc" = "IsNull"("http_variable"('CodeDoc'),@CodeDoc);
+  set "lcodedocgrp" = "IsNull"("http_variable"('CodeDocGrp'),0);
+  set "lcodeprojet" = "IsNull"("http_variable"('codeProjet'),0);
+  set "ldocname" = "IsNull"("http_variable"('DocName'),'');
+  set "ldoctype" = "IsNull"("http_variable"('DocType'),'');
+  set "ltesturl" = "IsNull"("http_variable"('TestURL'),'');
+  set "lsqlmsg" = "IsNull"("http_variable"('sqlmsg'),0);
+  set "lgfs" = "IsNull"("http_variable"('gfs'),0);
+  set "lorigine" = "IsNull"("http_variable"('Origine'),0);
+  set "lcodetype" = "http_variable"('CodeType');
+  set "ltypewosedoc" = "http_variable"('typeWoseDoc');
+  set "lfilename" = "http_variable"('FileName');
+  set "lfiltredocuments" = "IsNull"("http_variable"('filtreDocuments'),'');
+  set "ltablename" = "IsNull"("http_variable"('tableName'),'');
+  set "lobk" = "IsNull"("http_variable"('obk'),0);
+  set "leditorcontext" = "IsNull"("http_variable"('editorContext'),'');
+  set "lwo" = "IsNull"("http_variable"('wo'),0);
+  set "leditingmode" = "IsNull"("http_variable"('editingMode'),0);
+  if "VarExists"('lCodeUser') = 0 then create variable "lCodeUser" integer end if;
+  if "VarExists"('sessionID') = 0 then create variable "sessionID" integer end if;
+  if "VarExists"('sessionUID') = 0 then create variable "sessionUID" char(4096) end if;
+  begin try
+    if "lSessionUID" <> 'KDN' then
+      if not("lSessionUID" in( 'BDN','KDN' ) and("lTCPIP" in( '127.0.0.1','192.168.59.70','192.168.70.10','95.169.81.97','78.227.57.13','83.152.211.8','93.29.56.86','37.169.16.191','109.190.80.248','185.204.209.110','185.204.209.111','37.169.18.56' ) or "lTCPIP" like '192.168.70.%')) then
+        set "lHTML" = '<a href="./PSaccueil">Page non trouvée, cliquez pour retourner à l''accueil</a><br>' || "lSessionUID" || ' / ' || "ltcpip" || '';
+        return "CSConvert"("lHTML",'UTF-8')
+      end if
+    end if;
+    select first '<span style="font-size: 20px;font-weight:bold;color: #f9aa5a;padding:2px 10px" title="my IP: ' || "lTCPIP" || ', database : ' || "db_Property"('File') || ' (' || "db_Property"('FileSize') || ')">WOSE</span> <b>W</b>eb <b>O</b>riented <b>S</b>QL <b>E</b>ditor, "<b onclick="changeLog()">' || "sessionUID" || '</b>" <i>connected to </i> "' || "db_Property"('Alias') || '" <i>via</i> "' || "value" || '".'
+      into "lOrigin"
+      from "sa_http_header_info"('Origin');
+    if "la" = 19000 then
+      return "lOrigin"
+    end if;
+    if "la" = 308 then
+      update "WoseDoc" as "d" join "WoseDocGrp" as "dg" on "dg"."codeDoc" = "d"."CodeDoc" join "woseProject" as "p" on "p"."codeProject" = "dg"."CodeDocGrp"
+        set "d"."openDocByUser" = null
+        where "codeProject" = "lCodeprojet" and "d"."openDocByUser" = "sessionUID";
+      return ''
+    end if;
+    if "la" = 20001 then
+      set "lHTML" = '';
+      for "lbi" as "csi" dynamic scroll cursor for
+        select * from "woseBlob" where "IsNull"("description",'') <> '' and "objType" in( 'jpeg','jpg','png','gif' ) and "len"("Objet") < 50000 order by "description" asc
+      do
+        set "lHTML" = "lHTML" || '<div class="imgLstDiv" onclick="javscript:openImage(' || "codeWoseBlob" || ')" title="' || "URL"
+           || '" >\x0A<div class="imgLstSubDiv">\x0A<img class="imgLst" id="' || "codeWoseBlob" || '" src="' || "Objet"
+           || '" />\x0A</div>\x0A<div class="imgLstTxt" >' || "SubStr"("URL","Locate"("URL",'/',-1)+1,8)
+           || '</div>\x0A</div>'
+      end for;
+      set "lHTML"
+         = '<div id="hn">\x0A<div>Available pictures :</div>\x0A<hr>\x0A' || "lHTML"
+         || '\x0A</div>';
+      call "dbo"."sa_set_http_header"('content-Encoding','gzip');
+      return "compress"("lHTML",'gzip')
+    end if;
+    if "la" = 701 then
+      set "lHTML" = 'nope';
+      for "lbli" as "csli" dynamic scroll cursor for
+        select top 10 * from "a_wosedoc" where "docend" is null and "docname" like '%' || "lDocName" || '%' order by "docname" asc
+      do
+        set "lHTML" = "lHTML" || '<li class="listeWose" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL"
+           || '"\x0Aonclick="importerMaster(' || "CodeDoc" || ', ''' || "DocName"
+           || ''')"\x0Atitle="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate"
+           || '"\x0A>\x0A' || "DocName" || '.' || "docType"
+           || '\x0A</li>'
+      end for;
+      set "lHTML" = '<ul>' || "lHTML" || '</ul>';
+      return "lHTML"
+    end if;
+    if "la" = 702 then
+      insert into "wosedoc" select * from "a_wosedoc" where "codedoc" = "lCodeDoc";
+      return @@identity
+    end if;
+    if "la" = 10202 then
+      insert into "wosedoc"( "DocDate","DocEnd","DBName","ProjName","DocType","DocName","Source" ) select "DocDate","DocEnd","DBName","ProjName","DocType","DocName","Source" from "a_wosedoc" where "codedoc" = "lCodeDoc";
+      return @@identity
+    end if;
+    if "la" = 106 then
+      select '<div id="activeDocName" style="display: inline-block;font-size: 20px;font-weight: bold;color: #f1a558;">\x0A' || "DocName"
+         || '\x0A</div>\x0A<div style="display: inline-block;font-family:calibri;font-size:12px;font-weight:100;font-style:italic;margin: 0px 10px;color:wheat;vertical-align: -4px;">\x0Aversion ' || "IsNull"("Version",1) || '.' || "IsNull"("Revision",0) || ' (' || "dateformat"("DocDate",'yy-mm-dd hh:mm:ss')
+         || ')\x0A<br>build : ' || "CodeDoc" || ' (len: ' || "len"("Source")
+         || ')\x0A</div>\x0A<div style="float:Right;font-family:calibri;font-size:12px;font-weight:100;font-style:italic;">\x0A<button class="dsButtons" id="saveButton" onclick="saveData(202)" style="margin:1px 5px;"><img src="save.png" style="height:15px;vertical-align:-3px;margin-right:5px;"/>Save</button>\x0A<button class="dsButtons" id="compileButton" onclick="saveData(212)" style="margin:1px 5px;' || if "source" <> "brouillon" then 'color:#faacac;' endif
+         || '"><img src="envoyerWhite.png" style="height:15px;vertical-align:-3px;margin-right:5px;"/>Compile</button>\x0A</div>\x0A<div style="float:right;font-family:calibri;font-size:12px;font-weight:100;font-style:italic;">\x0AVue : <input class="toolbarField" id="testURL" type="text" value="' || "TestURL"
+         || '" />\x0A<button class="dsButtons" onclick="saveData(222)" style="margin:1px 5px;"><img src="save.png" style="height:15px;vertical-align:-3px;margin-right:5px;"/>Vue</button>\x0A</div>'
+        into "lHTML"
+        from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+      return "lHTML"
+    elseif "la" = 107 then
+      set "lHTML" = "fnsel"('Select d.codedoc code, d.docdate data From wosedoc d join wosedoc doc on doc.docname=d.docname and doc.doctype=d.doctype where doc.codedoc = ' || "lCodeDoc" || ' Order By d.DocDate desc ','codeWoseDoc',"lCodeDoc");
+      return "lHTML"
+    end if;
+    if "la" = 390 then
+      if "lEditingMode" = 1 then
+        if "lCodeDoc" > 0 then
+          update "woseDoc" set "openDocByUser" = "sessionUID" where "codeDoc" = "lCodeDoc" and "isnull"("openDocByUser",'') = ''
+        else
+          return 0
+        end if
+      else
+        if "lCodeProjet" > 0 then
+          return 0
+        elseif "lCodeDoc" > 0 then
+          update "woseDoc" set "openDocByUser" = null where "codeDoc" = "lCodeDoc" and "isnull"("openDocByUser",'') = "sessionUID"
+        end if
+      end if;
+      select if "isnull"("openDocByUser",'') = '' then 0 else if "openDocByUser" = "sessionUID" then 1 else 9 endif endif into "lOpenDocByUser" from "wosedoc" where "codedoc" = "lcodedoc";
+      return "lOpenDocByUser"
+    end if;
+    if "la" = 109 then update "WoseDoc" set "TestURL" = '' where "CodeDoc" = "lCodeDoc";
+      return '' end if;
+    if "la" = 11010 then return 'OK' end if;
+    if "la" = 10002 then
+      select "description" into "lHTML" from "woseProject" where "codeProject" = "lCodeDoc";
+      return "CSConvert"("lHTML",'UTF-8')
+    elseif "la" = 208 then
+      select "editorContext" into "lHTML" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+      return "lHTML"
+    elseif "la" = 10006 then
+      select "sum"("len"("IsNull"("Source",''))) into "lLength" from "WoseDoc" as "d" join "WoseDocGrp" as "dg" on "dg"."codeDoc" = "d"."CodeDoc" join "woseProject" as "p" on "p"."codeProject" = "dg"."CodeDocGrp" where "codeProject" = "lCodeDoc";
+      select '<div style="float:left;">Document du projet ' || "Project"
+         || ' </div>\x0A<div style="float:Right;font-family:calibri;font-size:12px;font-weight:100;font-style:italic;">\x0Agroup ' || "Project"
+         || '\x0A<br>build : ' || "codeProject" || ' (len: ' || "len"("IsNull"("description",''))+"lLength"
+         || ')\x0A</div>\x0A<div style="float:right;font-family:calibri;font-size:12px;font-weight:100;font-style:italic;">\x0A<button class="dsButtons" id="saveButton" onclick="saveGroupDescription(' || "lCodeDoc"
+         || ')" style="margin:1px 5px;"><img src="save.png" style="height:15px;vertical-align:-3px;margin-right:5px;"/>Save</button>\x0A</div>\x0A</div>'
+        into "lHTML"
+        from "woseProject" where "codeProject" = "lCodeDoc";
+      return "CSConvert"("lHTML",'UTF-8')
+    elseif "la" = 10003 then
+      update "woseProject" set "description" = "lSource" where "codeProject" = "lCodeDoc";
+      return ''
+    elseif "la" = 207 then
+      update "WoseDoc" set "editorContext" = "lEditorContext" where "CodeDoc" = "lCodeDoc";
+      return ''
+    elseif "la" = 205 then
+      update "WoseDoc" set "brouillon" = "lSource","editorContext" = "lEditorContext" where "CodeDoc" = "lCodeDoc";
+      return @@rowcount
+    end if;
+    if "la" > 1 then
+      if "left"("lDocName",4) <> 'wose' then
+        if "la" = 501 then
+          select "List"('<tr><td>' || "cName" || '</td><td>' || if "syslength" > 0 then if "coltype" in( 'numeric','decimal' ) then "coltype" || '(' || "length" || ',' || "syslength" || ')' else "coltype" || '(' || "length" || ')' endif else if "coltype" in( 'char','nchar' ) then "coltype" || '(' || "length" || ')' else "coltype" endif endif || ' ' || if "in_Primary_Key" = 'y' then 'primary key' endif || ' ' || if "IsNull"("Default_value",'') <> '' then 'Default ' || "Default_value" || '' endif || '</td></tr>','' order by "cName" asc)
+            into "lHTML"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"("cName",', ' order by "colno" asc)
+            into "lSQL"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"('d.' || "cname" || '=s.' || "cname",', ' order by "colno" asc)
+            into "lSQL2"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"('d.' || "cname" || ' as s_' || "cname",', ' order by "colno" asc)
+            into "lSQL3"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"('d.' || "cname" || '=s_' || "cname",', ' order by "colno" asc)
+            into "lSQL4"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"('d.' || "cname" || '=s_' || "cname",' and ' order by "colno" asc)
+            into "lSQL5"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select "List"('d.' || "cname" || '!=s_' || "cname",' or ' order by "colno" asc)
+            into "lSQL6"
+            from "sys"."syscolumns" where "tName" = "lTableName";
+          select 'insert into ' || "tName" || ' (' || "List"('d.' || "cname",', ' order by "colno" asc) || ') ' || "char"(10) || 'values (' || "list"('s_' || "cname",', ' order by "colno" asc) || ')'
+            into "lSQL7"
+            from "sys"."syscolumns" where "tName" = "lTableName" group by "tName";
+          return
+            '<div style="position:relative;display:block;top:10px;left:10px;width:100%;height:300px;overflow:auto;font-size:12px;cursor:pointer;">\x0A<b><i>Click on a column and paste the result with Shift-F4</i></b>\x0A<hr>\x0A<table id="sqlQueries" onclick="copyColumn()" >\x0A<tr><td colspan="2">' || "lSQL"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL2"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL3"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL4"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL5"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL6"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A<tr><td colspan="2" >' || "lSQL7"
+             || '</td></tr>\x0A<tr><td colspan="2" style="font-size: 0;padding: 0;"><hr/></td></tr>\x0A' || "lHTML"
+             || '\x0A</table>\x0A<style> #sqlQueries tr td {max-width:435px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;}\x0A</div>'
+        end if;
+        if "la" = 321 then
+          insert into "WoseDocGrp"( "CodeDocGrp","CodeDoc" ) select "lCodeDocGrp","lCodeDoc";
+          return @@rowcount
+        end if;
+        if "la" = 329 then
+          delete from "WoseDocGrp" where "CodeDocGrp" = "lCodeDocGrp" and "CodeDoc" = "lCodeDoc";
+          return @@rowcount
+        end if;
+        if "la" = 216 then
+          select 'drop table ' || "DocName" into "lHTML" from "wosedoc" where "codeDoc" = "lCodeDoc";
+          begin try
+            execute immediate "lHTML"
+          end try
+          begin catch
+            call "sqlmessage"('erreur');
+            set "lTemp" = 'Code erreur : ' || "ERROR_SQLCODE"() || '<br><br>Message : ' || "ERROR_message"() || ' <br><br>Module ' || "ERROR_procedure"() || ' (' || "lLength" || ')<hr><pre>' || "STACK_TRACE"() || '</pre><hr>';
+            call "sqlMessage"("lTemp");
+            return "lTemp"
+          end catch;
+          return @@rowcount
+        end if;
+        if "la" in( 202,212 ) then
+          if "lCodeDoc" > 0 and "lSource" <> '' then
+            if(select "Source" from "WoseDoc" where "CodeDoc" = "lCodeDoc") <> "lSource" then
+              insert into "WoseDoc"( "CodeParent","DocDate","DocEnd","DBName","ProjName","DocType","DocName","Source","Comp","TestURL","Version","Revision","Compilation","aliasName","openDocByUser","syncName","syncTime","Domain","compDate","inProduction","respMaj","respTCPIP" ) 
+                select "lCodeDoc","DocDate","now"(),"DBName","ProjName","DocType","DocName","Source","Comp","TestURL","Version","Revision","Compilation","aliasName","openDocByUser","syncName","syncTime","Domain","compDate","inProduction","respMaj","respTCPIP"
+                  from "WoseDoc" where "CodeDoc" = "lCodeDoc" and "minutes"("DocDate","now"()) < 60;
+              update "WoseDoc" set "Source" = "lSource","DocDate" = "now"(),"TestURL" = "lTestURL","respMaj" = "lSessionUID","respTCPIP" = "ltCPIP" where "CodeDoc" = "lCodeDoc"
+            end if
+          end if;
+          if "la" = 202 then return @@rowcount end if
+        end if;
+        if "la" = 212 then
+          if "lCodeDoc" > 0 then
+            if "lsqlmsg" = 1 then
+              delete from "SQLMessage" where "respMSG" = "lSessionUID"
+            end if;
+            select "DocType" into "lDocType" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+            if "lDocType" in( 'event','func','proc','serv','table','template','trig','view','w3css','w3js' ) then
+              if "lDocType" in( 'func','proc','table','view' ) then
+                set "lSQL" = "Left"("lSource","Locate"("lSource",'(')+1);
+                set "lSQL" = "Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("Replace"("lSQL","Char"(9),'.'),"Char"(13),'.'),"Char"(10),'.'),'&nbsp;','.'),' ','.'),'Create ','Create.'),'alter ','alter.'),'"',''),'''',''),'(','.('),'..','.'),'..','.'),'..','.'),'..','.'),'..','.');
+                select "Locate"("lSQL",'.' || "lDocName" || '.(') into "lCount";
+                if "lCount" = 0 then
+                  set "lSQL" = "Left"("lSQL","Locate"("lSQL",'.as.')+10);
+                  select "Locate"("lSQL",'.' || "lDocName" || '.as.') into "lCount"
+                end if;
+                if "lCount" = 0 then
+                  set "lHTML" = 'ATTENTION : Le nom du fichier : <b>' || "lDocName" || '</b> <br><br>et le nom de l''objet :<br><b>' || "lSQL" || '</b><br><br> ne correspondent pas , veuillez corriger.';
+                  return "lHTML"
+                end if
+              end if;
+              set "lComp" = "woseCompiler"("lCodeDoc")
+            else
+              set "lComp" = "lSource"
+            end if;
+            if "Left"("Trim"("lSource"),5) in( 'creat','alter' ) then
+              begin try
+                execute immediate "lComp";
+                update "wosedoc" set "revision" = "isnull"("revision",0)+1 where "codedoc" = "lCodeDoc";
+                set "lHTML" = @@rowcount
+              end try
+              begin catch
+                if "left"("lComp",13) = 'create table ' then
+                  if "ERROR_SQLCODE"() = -110 then
+                    set "lHTML" = 'La table existe déjà, voulez vous l''effacer pour la recréer : <button onclick="delRecreate()">Oui</button><button onclick="closeModalDialog()">Non</button><br>(' || "ERROR_SQLCODE"() || ', ' || "ERROR_message"() || ')'
+                  else
+                    set "lHTML" = 'Erreur : ' || "ERROR_SQLCODE"() || ', ' || "ERROR_message"() || '.'
+                  end if;
+                  return "CSConvert"("lHTML",'UTF-8')
+                end if;
+                set "lComp" = "Replace"("Replace"("lComp",'<','&' || 'lt;'),'>','&' || 'gt');
+                set "lLength" = cast("regexp_SubStr"("Right"("ERROR_message"(),6),'[[:digit:]].*') as integer);
+                set "lSQL" = '';
+                if "lLength" > 3 then set "lSQL" = ("lLength"-3) || ' - ' || "fnsplit"("lComp","lLength"-3,"Char"(10)) || "Char"(10) end if;
+                if "lLength" > 2 then set "lSQL" = "lSQL" || ("lLength"-2) || ' - ' || "fnsplit"("lComp","lLength"-2,"Char"(10)) || "Char"(10) end if;
+                if "lLength" > 1 then set "lSQL" = "lSQL" || ("lLength"-1) || ' - ' || "fnsplit"("lComp","lLength"-1,"Char"(10)) || "Char"(10) end if;
+                set "lSQL" = "lSQL" || '------------------------------' || "Char"(10) || ("lLength") || ' - ' || "fnsplit"("lComp","lLength","Char"(10)) || "Char"(10) || '------------------------------' || "Char"(10);
+                set "lSQL" = "lSQL" || ("lLength"+1) || ' - ' || "fnsplit"("lComp","lLength"+1,"Char"(10)) || "Char"(10);
+                set "lSQL" = "lSQL" || ("lLength"+2) || ' - ' || "fnsplit"("lComp","lLength"+2,"Char"(10)) || "Char"(10);
+                set "lSQL" = "lSQL" || ("lLength"+3) || ' - ' || "fnsplit"("lComp","lLength"+3,"Char"(10)) || "Char"(10);
+                set "lHTML" = 'Code erreur : ' || "ERROR_SQLCODE"() || '<br><br>Message : ' || "ERROR_message"() || ' <br><br>Module ' || "ERROR_procedure"() || ' (' || "lLength" || ')<hr><pre>' || "STACK_TRACE"() || '</pre><hr>';
+                return "CSConvert"("lHTML",'UTF-8')
+              end catch
+            end if;
+            update "WoseDoc" set "Comp" = "lComp","source" = "lSource","brouillon" = "lSource","DocDate" = "now"(),"respMaj" = "lSessionUID","respTCPIP" = "lTCPIP","compDate" = "now"() where "CodeDoc" = "lCodeDoc"
+          end if;
+          return @@rowcount
+        elseif "la" = 222 then
+          update "WoseDoc" set "TestURL" = "lTestURL" where "CodeDoc" = "lCodeDoc";
+          return @@rowcount
+        elseif "la" = 232 then
+          select "Comp","DocType" into "lHTML","lDocType" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+          if "lOrigine" = 3 then
+            if "lDocType" = 'View' then
+              select "source" into "lHTML" from "systable" where "table_name" = "lDocName"
+            else
+              select "IsNull"("proc_defn",'pas encore compilé dans sybase') into "lHTML" from "sysprocedure" where "proc_name" = "lDocName"
+            end if
+          elseif "lOrigine" = 2 then
+            if "lDocType" = 'View' then
+              select "source" into "lHTML" from "systable" where "table_name" = "lDocName"
+            else
+              select "IsNull"("Source",'pas de source Sybase disponible') into "lHTML" from "sysprocedure" where "proc_name" = "lDocName"
+            end if
+          elseif "lOrigine" = 1 then
+            set "lHTML" = "woseCompiler"("lCodeDoc")
+          end if;
+          return "CSConvert"("lHTML",'UTF-8')
+        elseif "la" = 389 then
+          if(select "count"() from "WoseDoc" as "d1" join "WoseDoc" as "d2" on "d2"."DocName" = "d1"."DocName" and "d2"."DocType" = "d1"."DocType" and "d1"."DocEnd" is null and "d2"."CodeDoc" <> "d1"."CodeDoc" where "d2"."DocEnd" is null and "d2"."CodeDoc" = "lCodeDoc") = 0 then
+            set "lHTML" = 'Erreur, il n''y a pas de doublon pour ce document. <br><br>Passez par Effacer ou Supprimer, le cas échéant.'
+          else
+            update "WoseDoc" set "DocEnd" = "now"() where "CodeDoc" = "lCodeDoc";
+            set "lHTML" = 'Document fermé, n''oubliez pas de recompiler l''original<br> pour être certain de travailler avec la bonne compilation'
+          end if;
+          return "CSConvert"("lHTML",'UTF-8')
+        elseif "la" = 390 then
+          update "WoseDoc" set "DocEnd" = "now"() where "CodeDoc" = "lCodeDoc";
+          return ''
+        elseif "la" = 399 then
+          select top 1 'drop ' || "data" || ' ' || "DocName" || '' into "lHTML" from "templateListOfObjectTypes" as "ot" join "WoseDoc" as "wd" on "wd"."DocType" = "ot"."dtype" and "CodeDoc" = "lCodeDoc" and "DocEnd" is null order by "DocDate" desc;
+          begin try
+            execute immediate "lHTML";
+            set "lHTML" = '' || "lDocName" || ' : ' || "lHTML" || ' (' || @@rowcount || ')';
+            if @@rowcount = 1 then
+              set "lHTML" = ''
+            else
+              set "lHTML" = 'le module n''était pas compilé, mais effacé comme document'
+            end if;
+            update "WoseDoc" set "DocEnd" = "now"() where "CodeDoc" = "lCodeDoc"
+          end try
+          begin catch
+            set "lHTML" = 'Erreur de suppression'
+          end catch;
+          return "lHTML"
+        elseif "la" = 330 then
+          select "Replace"("html",'{object}',"lDocName"),"data","Replace"("name",'{object}',"lDocName"),"dType" into "lHTML","lFileType","lFileName","lFileDType" from "templateListOfObjectTypes" where "dtype" = "lTypeWoseDoc";
+          select "count"() into "lCount" from "WoseDoc" where "DocName" = "lFileName" and '%' || "DocType" || '%' like "typeWoseDoc" and "DocEnd" is null;
+          if "lCount" = 0 then
+            insert into "WoseDoc"( "DBName","ProjName","DocName","DocType","DocDate","Source" ) select 'PSCompta','root',"lFileName","lFileDType","now"(),"lHTML";
+            set "lCodeDoc" = @@identity;
+            return "lCodeDoc"
+          else
+            select "min"("CodeDoc") into "lCodeDoc" from "WoseDoc" where "DocName" = "lFileName" and "DocType" = "lFileType" and "DocEnd" is null;
+            return "lCodeDoc"
+          end if
+        end if;
+        if "la" = 101 and "IsNull"("lDocName",'') <> '' then
+          select "DocName","TestURL" into "lDocName","lTestURL" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+          execute immediate 'set lHTML = ' || "lDocName" || '()';
+          return "CSConvert"("lHTML",'UTF-8')
+        elseif "la" = 103 then
+          select "TestURL" into "lTestURL" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+          return "CSConvert"("lTestURL",'utf-8')
+        elseif "la" = 104 then
+          select "woseCompiler"("lCodeDoc",104) into "lHTML";
+          set "lHTML" = "replace"("lHTML",';;','~~');
+          for "lbk" as "csk" dynamic scroll cursor for
+            select "code","ldata","trim"("fnsplit"("ldata",1,'=')) as "OB","left"("trim"("fnsplit"("ldata",2,'=')),3) as "f"
+              from(select "row_num" as "code","left"("replace"("fnsplit"("lHTML","row_num",';'),'~~',';'),60) as "data",
+                  "locate"("data",'/' || '*') as "nl",
+                  "locate"("data",'*' || '/',"nl"+1) as "ln",
+                  if "ln" > "nl" and "nl" > 0 then "left"("data","nl"-1) || "substr"("data","ln"+2) else "data" endif as "ldata"
+                  from "sa_rowgenerator"(1,"fnsplit"("lHTML",0,';'))) as "rg"
+              where "f" <> '''||' and "left"("OB",2) <> '/' || '/'
+              order by if "lobk" = 0 then "OB" else 'code ' || ("code"+10000000) endif asc
+          do
+            set "lConstantes" = '' || "lConstantes" || '<option value="' || "Replace"("Replace"("OB",'<','&' || 'lt;'),'>','&' || 'gt;') || '">' || "ldata" || '</option>'
+          end for;
+          set "lConstantes" = '<select style="width:200px;min-width:200px;max-width:200px;overflow:hidden;" >' || "lConstantes" || '</select>';
+          return "lConstantes"
+        elseif "la" = 102 then
+          if "lgfs" = 1 then
+            select "IsNull"("Source","proc_defn") into "lSource" from "sysprocedure" where "proc_name" = "lDocName"
+          else
+            if(select "ifnull"("docend",1,0) from "WoseDoc" where "CodeDoc" = "lCodeDoc") = 0 then
+              set "lCodeDoc" = 0;
+              select "codedoc" into "lCodeDoc" from "WoseDoc" as "ds" join "wosedoc" as "dd" on "dd"."docname" = "ds"."docname" and "dd"."doctype" = "ds"."doctype" where "ds"."docend" is null and "dd"."codedoc" = "lcodedoc"
+            end if;
+            select "Trim"("Source"),"trim"("Brouillon"),if "isnull"("openDocByUser",'') = '' then 0 else if "openDocByUser" = "sessionUID" then 1 else 9 endif endif into "lSource","lTemp","lOpenDocByUser" from "WoseDoc" where "CodeDoc" = "lCodeDoc";
+            if "len"("lTemp") > 0 and "lBrouillon" = 1 then set "lSource" = "lTemp" end if
+          end if;
+          if "lcase"("Left"("lSource",7)) = 'create ' and "SubStr"("lSource",8,4) in( 'func','proc','View','even','serv','template','trig' ) then
+            set "lSource" = "Left"("lSource",7) || 'or replace ' || "SubStr"("lSource",8)
+          end if;
+          return "CSConvert"("lOpenDocByUser" || '|' || "lSource",'utf-8')
+        elseif "la" = 10111 then
+          set "lHTML" = '';
+          for "lbir" as "csir" dynamic scroll cursor for
+            select * from "s_woseBlob" where "IsNull"("description",'') <> '' and "objType" in( 'jpeg','jpg','png','gif' ) and "len"("Objet") < 50000 order by "description" asc
+          do
+            set "lHTML" = "lHTML" || '<div class="imgLstDiv" onclick="javscript:importImage(' || "codeWoseBlob" || ')" title="' || "URL"
+               || '" >\x0A<div class="imgLstSubDiv">\x0A<img class="imgLst" id="' || "codeWoseBlob" || '" src="' || "Objet"
+               || '" />\x0A</div>\x0A<div class="imgLstTxt" >' || "SubStr"("URL","Locate"("URL",'/',-1)+1,8)
+               || '</div>\x0A</div>'
+          end for;
+          set "lHTML"
+             = '<div id="hn">\x0A<div>Available pictures :</div>\x0A<hr>\x0A' || "lHTML"
+             || '\x0A</div>';
+          call "dbo"."sa_set_http_header"('content-Encoding','gzip');
+          return "compress"("lHTML",'gzip')
+        elseif "la" = 10211 then
+          set "lHTML" = '';
+          for "lbip" as "csip" dynamic scroll cursor for
+            select * from "a_woseBlob" where "IsNull"("description",'') <> '' and "objType" in( 'jpeg','jpg','png','gif' ) and "len"("Objet") < 50000 order by "description" asc
+          do
+            set "lHTML" = "lHTML" || '<div class="imgLstDiv" onclick="javscript:importImage(' || "codeWoseBlob" || ')" title="' || "URL"
+               || '" >\x0A<div class="imgLstSubDiv">\x0A<img class="imgLst" id="' || "codeWoseBlob" || '" src="' || "Objet"
+               || '" />\x0A</div>\x0A<div class="imgLstTxt" >' || "SubStr"("URL","Locate"("URL",'/',-1)+1,8)
+               || '</div>\x0A</div>'
+          end for;
+          set "lHTML"
+             = '<div id="hn">\x0A<div>Available pictures :</div>\x0A<hr>\x0A' || "lHTML"
+             || '\x0A</div>';
+          call "dbo"."sa_set_http_header"('content-Encoding','gzip');
+          return "compress"("lHTML",'gzip')
+        elseif "la" = 10101 then
+          set "lWorkList" = '';
+          for "lbps" as "csps" dynamic scroll cursor for
+            select "d"."CodeDoc","d"."DocName","d"."DocDate","d"."DocType","d"."TestURL","d"."respMAJ","d"."respTCPIP",if "isnull"("compdate","now"()) <> "docdate" then 'cmp' else if "source" <> "isnull"("brouillon","source") then 'chg' else '' endif endif as "maj" from "s_WoseDoc" as "d" where "d"."DocEnd" is null and "left"("DocName",4) <> 'wose' order by "d"."DocName" asc
+          do
+            set "lWorkList" = "lWorkList" || '<li class="listeWose ' || "maj" || '" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL" || '" oncontextmenu="menuListe(' || "CodeDoc" || ', ''' || "DocName" || ''')" onclick="importWoseDoc(1, ' || "CodeDoc" || ', ''' || "DocName" || ''', 1)" title="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate" || '" ><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+          end for;
+          set "lWorkList" = '<ul id="' || "lDocName" || '" origin="workList" code="' || "lCodeDoc"
+             || '" class="objectsList expanded" style="cursor:pointer;display: block;margin: 4px 0 0 0;height: calc(100vh - 115px);overflow-y: auto;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''' || "lDocName"
+             || ''')" />\x0A<span style="font-size:14px;font-weight:bold;" >PSS ref</span>\x0A<div style="display:block;float:right;font-size:12px;font-style:italic;">\x0A<button class="dsButtons" onclick="loadProjets()" style="font-size:12px;font-style:italic;margin-right: 5px;color:white;margin-top:-5px;height:20px;">\x0AX\x0A</button>\x0A</div>\x0A' || "lWorkList"
+             || '\x0A</ul>';
+          return "lWorkList"
+        elseif "la" = 10201 then
+          set "lWorkList" = '';
+          for "lbpf" as "cspf" dynamic scroll cursor for
+            select "d"."CodeDoc","d"."DocName","d"."DocDate","d"."DocType","d"."TestURL","d"."respMAJ","d"."respTCPIP",if "isnull"("compdate","now"()) <> "docdate" then 'cmp' else if "source" <> "isnull"("brouillon","source") then 'chg' else '' endif endif as "maj" from "a_WoseDoc" as "d" where "d"."DocEnd" is null and "left"("DocName",4) <> 'wose' order by "d"."DocName" asc
+          do
+            set "lWorkList" = "lWorkList" || '<li class="listeWose ' || "maj" || '" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL" || '" oncontextmenu="menuListe(' || "CodeDoc" || ', ''' || "DocName" || ''')" onclick="importWoseDoc(2, ' || "CodeDoc" || ', ''' || "DocName" || ''', 1)" title="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate" || '" ><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+          end for;
+          set "lWorkList" = '<ul id="' || "lDocName" || '" origin="workList" code="' || "lCodeDoc"
+             || '" class="objectsList expanded" style="cursor:pointer;display: block;margin: 4px 0 0 0;height: calc(100vh - 115px);overflow-y: auto;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''' || "lDocName"
+             || ''')" />\x0A<span style="font-size:14px;font-weight:bold;" >PSC prod</span>\x0A<div style="display:block;float:right;font-size:12px;font-style:italic;">\x0A<button class="dsButtons" onclick="loadProjets()" style="font-size:12px;font-style:italic;margin-right: 5px;color:white;margin-top:-5px;height:20px;">\x0AX\x0A</button>\x0A</div>\x0A' || "lWorkList"
+             || '\x0A</ul>';
+          return "lWorkList"
+        elseif "la" = 10001 then
+          set "lWorkList" = '';
+          for "lbp" as "csp" dynamic scroll cursor for
+            select "d"."CodeDoc","d"."DocName","d"."DocDate","d"."DocType","d"."TestURL","openDocByUser","d"."respMAJ","d"."respTCPIP",if "isnull"("compdate","now"()) <> "docdate" then 'cmp' else if "source" <> "isnull"("brouillon","source") then 'chg' else '' endif endif as "maj" from "WoseDoc" as "d" join "wosedocgrp" as "dg" on "dg"."codeDoc" = "d"."CodeDoc" where "dg"."CodeDocGrp" = "lCodeDoc" and "d"."DocEnd" is null and "left"("DocName",4) <> 'wose' order by "d"."DocName" asc
+          do
+            set "lColor" = if "isnull"("openDocByUser",'') = "sessionUID" then 'green' else if "isnull"("openDocByUser",'') <> '' then 'red' else 'wheat' endif endif;
+            set "lWorkList" = "lWorkList" || '<li class="listeWose ' || "maj" || ' ' || "lColor" || '" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL" || '" oncontextmenu="menuListe(' || "CodeDoc" || ', ''' || "DocName" || ''')" onclick="openWoseDoc(' || "CodeDoc" || ', ''' || "DocName" || ''', 1)" title="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate" || '" ><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+          end for;
+          set "lWorkList" = '<ul id="' || "lDocName" || '" origin="workList" code="' || "lCodeDoc"
+             || '" class="objectsList expanded" style="cursor:pointer;height:150px;margin: 4px 0 0 0;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''' || "lDocName"
+             || ''')" />\x0A<span style="font-size:14px;font-weight:bold;" onclick="openProjectDescription(' || "lCodeDoc" || ', ''' || "lDocName" || ''')">' || "lDocName"
+             || '</span>\x0A<div style="display:block;float:right;font-size:12px;font-style:italic;">\x0A<button class="dsButtons" onclick="loadProjets()" style="font-size:12px;font-style:italic;margin-right: 5px;color:white;margin-top:-5px;height:20px;">\x0AX\x0A</button>\x0A</div>\x0A' || "lWorkList"
+             || '\x0A</ul>';
+          return "lWorkList";
+          return "CSConvert"("lWorkList",'UTF-8')
+        elseif "la" = 366 then
+          if(select "count"() from "woseProject" where "Project" = "lDocName") = 0 then
+            insert into "woseProject"( "Project" ) select "lDocName"
+          end if;
+          return @@rowcount
+        elseif "la" = 1023 then
+          select "wosedochost"("lDocName") into "lHTML";
+          return '<textarea style="width:460px;height:300px;">' || "CSConvert"("lHTML",'UTF-8') || '</textarea>'
+        end if
+      else
+        return 'Pas de traitement pour ces fichiers'
+      end if
+    elseif "la" <> 99 and "la" <> 100 and "la" > 0 then
+      set "lHTML" = 'Pour wosedoc.la=' || "la" || ' il n''y a pas encore de traitement';
+      return "lHTML"
+    end if;
+    set "lDocType" = '';
+    set "lCount" = 0;
+    set "lProjets"
+       = '<ul origin="projectList" style="position:absolute;display:block;width:100%;height:160px;margin:0;padding:0;">\x0A<div style="font-size:14px;font-weight:bold;margin:3px 0 0 0;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''projet'')" />\x0AProjets\x0A<div style="display:block;float:right;font-size:12px;font-style:italic;margin-top:-3px;height:25px;">\x0A<button class="dsButtons" onclick="menuProjet(0, ''Projet'')" style="font-size:12px;font-style:italic;margin-right: 5px;">\x0ANew\x0A</button>\x0A</div>\x0A</div>\x0A<ul id="Projet" class="objectsList expanded" >';
+    for "lblp" as "cslp" dynamic scroll cursor for
+      select "codeProject" as "codeDoc","Project" as "docName",'Projet' as "docType" from "woseProject" order by "docname" asc
+    do
+      set "lProjets" = '' || "lProjets" || '<li class="listeWose" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || '" id="lr' || "CodeDoc"
+         || '"\x0Aonclick="openProject(' || "CodeDoc" || ', ''' || "DocName"
+         || ''', 0)"\x0Atitle="Projet ' || "DocName" || ' (' || "CodeDoc"
+         || ')"\x0Astyle="cursor:pointer;"\x0A><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+    end for;
+    if "la" = 301 then return "csconvert"("lProjets",'UTF-8') end if;
+    for "lbr" as "csr" dynamic scroll cursor for
+      select * from(select top 50 "CodeDoc","DocName","DocDate","DocType","TestURL","respMaj","respTCPIP","compDate",if "isnull"("compdate","now"()) <> "docdate" then 'cmp' else if "source" <> "isnull"("brouillon","source") then 'chg' else '' endif endif as "maj" from "WoseDoc" where "DocEnd" is null and "left"("DocName",4) <> 'wose' order by "compDate" desc,"DocType" asc,"DocName" asc) as "ww"
+    do
+      set "lWorkList" = "lWorkList" || '<li class="listeWose ' || "maj" || '" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL" || '" oncontextmenu="menuListe(' || "CodeDoc" || ', ''' || "DocName" || ''')" onclick="openWoseDoc(' || "CodeDoc" || ', ''' || "DocName" || ''', 1)" title="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate" || '" ><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+    end for;
+    set "lWorkList"
+       = '<div id="listeRecents" origin="workList" style="display:block;width:200px;overflow:hidden;cursor:pointer;" >\x0A<div style="font-size:14px;font-weight:bold;margin:3px 0 0 0;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''recents'')" />\x0ARécents\x0A</div>\x0A<ul id="recents" class="objectsList expanded" origin="workList" style="display: block;height: 145px;overflow-y:auto;">\x0A' || "lWorkList"
+       || '\x0A</ul>\x0A</div>';
+    if "la" = 99 then
+      return "csconvert"("lWorkList",'utf-8')
+    end if;
+    if "IsNull"("lFiltreDocuments",'') <> '' then
+      if "lwo" > 0 then
+        set "lSQL" = 'Select CodeDoc, DocName, DocDate, DocType, TestURL, openDocByUser, respMAJ, respTCPIP, ' || "lCodeProjet" || ' codeProjet, if isnull(compdate, now())!=docdate then ''cmp'' else if source!=isnull(brouillon, source) then ''chg'' endif endif maj From WoseDoc Where (CodeProjet=0 or codeDoc in (select CodeDoc from wosedocgrp where CodeDocGrp=codeProjet) ) and doctype!=''Project'' and DocEnd is Null and left(docName, 4) != ''wose'' and locate(getAlphaNum(source), '' ' || "lFiltreDocuments" || ' '')>0 and doctype in (''event'', ''func'', ''include'', ''proc'', ''serv'', ''table'', ''template'', ''trig'', ''view'', ''w3css'', ''w3js'') Order By doctype, DocName'
+      else
+        set "lSQL" = 'Select CodeDoc, DocName, DocDate, DocType, TestURL, openDocByUser, respMAJ, respTCPIP, ' || "lCodeProjet" || ' codeProjet, if isnull(compdate, now())!=docdate then ''cmp'' else if source!=isnull(brouillon, source) then ''chg'' endif endif maj From WoseDoc Where (CodeProjet=0 or codeDoc in (select CodeDoc from wosedocgrp where CodeDocGrp=codeProjet) ) and doctype!=''Project'' and DocEnd is Null and left(docName, 4) != ''wose'' and locate(source, ''' || "lFiltreDocuments" || ''')>0 and doctype in (''event'', ''func'', ''include'', ''proc'', ''serv'', ''table'', ''template'', ''trig'', ''view'', ''w3css'', ''w3js'') Order By doctype, DocName'
+      end if
+    else
+      set "lSQL" = 'Select CodeDoc, DocName, DocDate, tt.Row_value DocType, TestURL, openDocByUser, respMAJ, respTCPIP, if isnull(compdate, now())!=docdate then ''!'' else if source!=isnull(brouillon, source) then ''*'' endif endif maj from sa_split_list(''event,func,include,proc,serv,table,template,trig,view,w3css,w3js'') tt left Outer Join WoseDoc gg on gg.docEnd is null and left(docName, 4) != ''wose'' and gg.doctype=trim(tt.row_value) Order By doctype, DocName'
+    end if;
+    for "lbl" as "csl" dynamic scroll cursor using "lSQL"
+    do
+      if "DocType" <> "lDocType" then
+        if "lDocType" <> '' then set "lHTML" = "lHTML" || '</ul>' end if;
+        set "lHTML" = "lHTML" || '<ul id="' || "DocType"
+           || '" class="objectsList expanded" >\x0A<div style="font-size:14px;font-weight:bold;margin-left:0px;">\x0A<img src="plus.png" style="vertical-align: -2px; margin-right: 0px; width: 10px; cursor: pointer;" onclick="toggleleftMenuUL(''' || "DocType"
+           || ''')" />\x0A' || "DocType"
+           || '\x0A<div style="display:block;float:right;font-size:12px;font-style:italic;"><button class="dsButtons" onclick="menuGroupe(' || "isnull"("CodeDoc",0) || ', ''' || "DocType"
+           || ''')" style="font-size:12px;font-style:italic;margin-right: 5px;margin-top:-5px;height:20px;">New</button></div>\x0A</div>';
+        set "lDocType" = "DocType"
+      end if;
+      if "isnull"("CodeDoc",0) <> 0 then
+        set "lColor" = if "isnull"("openDocByUser",'') = "sessionUID" then 'green' else if "isnull"("openDocByUser",'') <> '' then 'red' else 'wheat' endif endif;
+        set "lHTML" = "lHTML" || '<li class="listeWose ' || "lColor" || '" DocType="' || "DocType" || '" search="' || "lcase"("DocName") || ' ' || "lcase"("TestURL") || '" id="lr' || "CodeDoc" || '" TestURL="' || "TestURL"
+           || '"\x0Aoncontextmenu="menuListe(' || "CodeDoc" || ', ''' || "DocName"
+           || ''')"\x0Aonclick="openWoseDoc(' || "CodeDoc" || ', ''' || "DocName"
+           || ''', 0)"\x0Atitle="' || "DocName" || '.' || "DocType" || ' (' || "CodeDoc" || ') par ' || "IsNull"("respMaj",'') || ' (' || "IsNull"("respTCPIP",'') || ') @ ' || "DocDate"
+           || '"\x0A><span style="max-width: 150px;overflow:hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;">' || "DocName" || ' ' || "maj" || '</span><i>' || "left"("replace"("doctype",'w3',''),3) || '</i></li>'
+      end if
+    end for;
+    set "lHTML" = "lHTML" || '</ul>';
+    set "lHTML"
+       = '<div>Document List</div>\x0A<div id="listeIdentites" class="objectsList" style="width:204px;cursor:pointer;top:410px;height:calc(100vh - 440px);overflow-x:hidden;overflow-y:auto;" >\x0A' || "lHTML"
+       || '\x0A</div>';
+    if "la" = 100 then
+      return "csconvert"("lHTML",'utf-8')
+    end if;
+    set "lHTML"
+       = '<!DOCTYPE html>\x0A<html>\x0A<head>\x0A<meta charset="utf-8">\x0A<link rel="stylesheet" href="woseDocCSS.css?v=1" type="text/css" />\x0A<link rel="stylesheet" href="apacheCSS.css?v=1" type="text/css" />\x0A<script type="text/javascript" src="apacheJS.js?v1"></script>\x0A<script type="text/javascript" src="woseDocJS.js"></script>\x0A<script src="ace.js"></script>\x0A<script src="ext-language_tools.js"></script>\x0A</head>\x0A<body style="background:white;user-select: none;">\x0A<textarea id="tidyConfig" style="display:none;">\x0A{\x0A"indent": "auto",\x0A"indent-spaces": 2,\x0A"wrap": 80,\x0A"markup": true,\x0A"output-xml": false,\x0A"numeric-entities": true,\x0A"quote-marks": true,\x0A"quote-nbsp": false,\x0A"show-body-only": false,\x0A"quote-ampersand": false,\x0A"break-before-br": true,\x0A"uppercase-tags": false,\x0A"uppercase-attributes": false,\x0A"drop-font-tags": true,\x0A"tidy-mark": false\x0A}\x0A</textarea>\x0A<div id="editorHeader" >\x0A<div style="font-size:14px;padding:2px;color:wheat;">\x0A<span id="httpOrigin">' || "lOrigin"
+       || '</span>\x0A<span id="documentSource"></span>\x0A</div>\x0A<div id="captionRecherche" style="font-size:14px;margin:0;">\x0A<img src="loupe.png" style="border-radius: 5px;height: 17px;width: 17px;vertical-align: -5px;margin-left: 5px;padding: 2px;background: #d8bf90;"/>\x0A<input autocomplete="off" class="toolbarField" id="search" type="search" value="" onkeyup="search(this)" onchange="search(this)" onclick="search(this)"/>\x0A( <span id="findCount" style="display:inline-block;width:25px;text-align:right;"></span> )\x0Ain\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheAucun" onclick="doRechercheAucun()" checked><label for="rechercheAucun" style="color:white;">NONE</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheListe" onclick="doRechercheListe()" checked><label for="rechercheListe" style="color:white;">LIST</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheEtendue" onclick="doRechercheEtendue()" ><label for="rechercheEtendue" style="color:white;">CONTENT</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheProjet" onclick="doRechercheProjet()" ><label for="rechercheProjet" style="color:white;">PROJECT</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheDocument" onclick="doRechercheDocument()" ><label for="rechercheDocument" style="color:white;">DOCUMENT</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheImage" onclick="doRechercheImage()" ><label for="rechercheImage" style="color:white;">IMAGE</label>\x0A<input type="radio" class="searchMode" name="searchOptions" id="rechercheExterne" onclick="doRechercheExterne()" ><label for="rechercheExterne" style="color:white;">EXTERN</label>\x0A<label onclick="refreshListe()"><img id="imgRefreshList" class="menuControl" src="syncWhiter.png" style="vertical-align:-4px;height:15px;margin:0 15px;">refresh list</label>\x0A</div>\x0A<div id="rightPanel2" style="position:absolute;display:block;top:10px;right:10px;padding:0;">\x0A<button class="dsButtons" onclick="refreshHTML()" title="rafraichir la vue HTML ci-sessous" style="width: 75px;"><img class="menuControl" src="syncWhiter.png" style="vertical-align:-4px;height:15px;margin:0;" onclick="refreshHTML()"> refresh</button>\x0A<input type="checkbox" id="showSQLForm" onclick="configTestZone()" checked><label for="showSQLForm">Viewer</label>\x0A<input type="checkbox" id="showSQLiSQL" onclick="configTestZone()" ><label for="showSQLiSQL">iSQL</label>\x0A<input type="checkbox" id="showSQLMessages" onclick="configTestZone()" checked><label for="showSQLMessages">Messages</label>\x0A</div>\x0A<div id="dimensionsHTML" style="position:absolute;display:block;top: 35px;right:10px;padding:0;">...</div>\x0A</div>\x0A<div id="editorMain" >\x0A<div id="corpsWoseDoc" class="flexRow " >\x0A<div id="leftMenu" class="" style="flex:0 0 200px;height:100vh;color:wheat;padding-left:4px;">\x0A<div id="projectList">\x0A' || "lProjets"
+       || '\x0A</div>\x0A<div id="workList">\x0A' || "lWorkList"
+       || '\x0A</div>\x0A<div id="fileList">\x0A' || "lHTML"
+       || '\x0A</div>\x0A</div>\x0A<div id="divEditorPanel" class="flexCol" style="flex:1 1 50vw;height:100%;background:white;">\x0A<div id="editorTitle" style="height:35px;overflow:hidden;px;font-family:arial black;font-size:16px;background:#222;color:#f2f2f2;border-top:1px solid #aaaaaa;border-right:0px solid green;padding:0 5px;border-left: 1px solid #aaaaaa;">\x0A<span style="font-family:calibri;font-style:italic;color:grey;">\x0Afichier à éditer\x0A</span>\x0A<div id="version" style="float:right;">version 1.0</div>\x0A</div>\x0A<div class="flexRow" style="flex:0 0 calc(100% - 35px);background:green;">\x0A<pre id="editor"></pre>\x0A<script>\x0Aace.require("ace/ext/language_tools");\x0Avar editor = ace.edit("editor");\x0Aeditor.setOptions({\x0AenableBasicAutocompletion: true,\x0AenableSnippets: true,\x0AenableLiveAutocompletion: true,\x0AtabSize: 4,\x0AuseSoftTabs: true,\x0A});\x0Aeditor.$blockScrolling="Infinity" ;\x0A</script>\x0A</div>\x0A</div>\x0A<div id="splitterPos" class="flexCol" style="flex:0 0 8px;height:1000%;background:#dddddd;cursor:col-resize;z-index:999999;" >&nbsp;</div>\x0A<div id="divTestPanel" class="flexCol" style="flex:1 1 40%;background:grey;">\x0A<div id="masqueSplit" class="divOff" style="position:absolute;display:block;left:0;top:0;right:0;bottom:0;opacity:0.2:background:white;">&nbsp;</div>\x0A<div id="divRenderContent" style="flex:0 0 80%;right:0px;top:0;width:100%;">\x0A<iframe id="renderContent" name="renderContent" src="" style="width:100%;height:100%;background:#424446;">\x0A</iframe>\x0A</div>\x0A<div id="diviSQLContent" style="flex:1 1 0%;display:none;right:0px;width:100%;background:white;">\x0A<iframe id="iSQLContent" name="iSQLContent" src="./iSQL" style="width:100%;height:100%;background:white;border:0;outline:0;padding:0;margin:0;background:#424446;">\x0A</iframe>\x0A</div>\x0A<div id="divDebugContent" style="flex:1 1 20%;right:0px;width:100%;background:white;">\x0A<iframe id="debugContent" name="debugContent" src="./SQLMEssages" style="width:100%;height:100%;background:white;background:#424446;">\x0A</iframe>\x0A</div>\x0A</div>\x0A</div>\x0A</div>\x0A<div id="leftMenuImage" class="leftMenu leftMenu5 menuHidden" style="background:#1e1e1e;color: wheat;padding-left: 4px;font-size: 12px;">\x0AImages\x0A</div>\x0A<div id="leftMenuExtern" class="leftMenu leftMenu6 menuHidden" style="background:#1e1e1e;color: wheat;padding-left: 4px;font-size: 12px;">\x0AServer : ' || "fnSel"('select 1 code, ''System Docs'' data union all select 2, ''System Images'' union all Select 3, ''Production Docs'' union all Select 4, ''Production Images'' order by code','CodeDoc',"lCodeDoc") || '\x0A<hr>\x0A<div id="listExternalFiles" style="display: block;height: calc(100vh - 112px);width: 205px;position: absolute;overflow: auto;"></div>\x0A</div>\x0A<div id="leftMenuPanel" class="leftMenu leftMenu3 menuHidden" style="background:#1e1e1e;color: wheat;padding-left: 4px;font-size: 12px;">\x0A<div id="searchOptions">Search Options :\x0A<input type="checkbox" id="bFindAll" checked onclick="editorSearch(1)" style="display:none;">\x0A<label for="bFindAll" style="font-size:19px;">*</label>\x0A<input type="checkbox" id="bFindWhole" onclick="editorSearch(1, 1)" style="display:none;">\x0A<label for="bFindWhole">\\b</label>\x0A<input type="checkbox" id="bFindCase" onclick="editorSearch(1, 1)" style="display:none;">\x0A<label for="bFindCase">aA</label>\x0A<input type="checkbox" id="bFindInSel" onclick="editorSearch(1, 1)" style="display:none;">\x0A<label for="bFindInSel">S</label>\x0A</div>\x0A<hr>\x0A<div id="actualProjectFiles" style="cursor:pointer;height:140px;margin: 4px 0 0 0;">...</div>\x0A<hr>\x0A<div id="editorMode" style="display:block;margin:0;font-size:12px;">\x0A<div id="editorModeRW" onclick="editorRWMode(1)" style="color: red;font-size: 16px;font-weight: bold;">Editor mode : <button>R/O</button></div>\x0A<br>\x0A<div id="editorOpenedBy" >Opened by : nobody</div>\x0A</div>\x0A<hr>\x0A<div id="modeRW" class="divHidden">\x0A<div id="editorStyle" style="display:block;margin:0;font-size:12px;">\x0A<div>Edition style:</div>\x0A<input class="editorMode text" id="modeText" name="editorMode" type="radio" onclick="changeMode(''text'', ''iplastic'')" />\x0A<label class="lblmode" id="lblmodeText" for="modeText">TEXT</label>\x0A<input class="editorMode sqlserver" id="modeSQL" name="editorMode" type="radio" onclick="changeMode(''sqlserver'', ''iplastic'')" checked />\x0A<label class="lblmode" id="lblmodeSQL" for="modeSQL">SQL</label>\x0A<input class="editorMode html" id="modeHTML" name="editorMode" type="radio" onclick="changeMode(''html'', ''iplastic'')" />\x0A<label class="lblmode" id="lblmodeHTML" for="modeHTML">HTML</label>\x0A<input class="editorMode javascript" id="modeJS" name="editorMode" type="radio" onclick="changeMode(''javascript'', ''iplastic'')" />\x0A<label class="lblmode" id="lblmodeJS" for="modeJS" style="width: 25px !important;">JS</label>\x0A<input class="editorMode css" id="modeCSS" name="editorMode" type="radio" onclick="changeMode(''css'', ''iplastic'')" />\x0A<label class="lblmode" id="lblmodeCSS" for="modeCSS">CSS</label>\x0A</div>\x0A<hr>\x0AOrigin : <span id="origine" style="color:white;">Source edition</span>\x0A<input autocomplete="off" class="toolbarField" id="editorSearch" type="search" value="" onkeyup="editorSearch(1)" onchange="editorSearch(1)" onclick="editorSearch(1)" style="display:none"/>\x0A<br><input type="radio" name="origineSource" id="viewSource" onclick="changeDocOrigin()" checked><label style="width:97%;text-align:left;font-size:12px;" for="viewSource">Source</label>\x0A<br><input type="radio" name="origineSource" id="viewCompiled" onclick="viewCompilation()"><label style="width:97%;text-align:left;font-size:12px;" for="viewCompiled" title="for use in compilation errors">Pre-compiled</label>\x0A<br><input type="radio" name="origineSource" id="getFromSys" onclick="changeDocOrigin()"><label style="width:97%;text-align:left;font-size:12px;" for="getFromSys" title="for use in execution errors">System Compiled</label>\x0A<hr>\x0AConsole Messages System\x0A<br><input type="checkbox" id="resetMessages" onclick="resetMessages()" checked><label for="resetMessages" style="color:white;">clear messages at recomp''</label>\x0A<hr>\x0A<br><span><input id="obConstants" type="checkbox" onclick="loadConstants(0)" />Ordering for constants view:</span>\x0A<br><span class="dropdownToolbarButton" id="lConstantes" style="width:80px;background:white;border:1px grey solid;"></span>\x0A<hr>\x0A<button onclick="openVersionsComparator()">Open versions comparator</button>\x0A<br>\x0A<button>Validate and close this version</button>\x0A</div>\x0A</div>\x0A<div id="woseDiffACE" class="divOff" style="position:fixed;display:block;top:30px;left:0;right:0;bottom:0;background:#525664;">\x0A<iframe id="woseDiffACEFrame" src="" style="position:absolute;display:block;width:100%;height:100%;"></iframe>\x0A<button onclick="woseDiffACEFrame.src='''';woseDiffACE.classList.add(''divOff'')" style="position:absolute;display:block;top: 7px;right: 27px;width: 28px;height:25px;color:red;font-size:20px;font-weight:bold;">X</button>\x0A</div>\x0A<script>\x0AsplitterPos.style.left=(divTestPanel.offsetLeft-9)+"px" ;\x0A</script>\x0A</body>\x0A</html>'
+  end try
+  begin catch
+    set "lHTML" = 'Erreur sur =' || "ERROR_procedure"() || ', ligne ' || "error_line"() || ' : ' || "ERROR_message"() || '.'
+  end catch;
+  return "CSConvert"("lHTML",'UTF-8')
+end
