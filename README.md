@@ -17,7 +17,9 @@ Using a simple web-bowser, WOSE provides :
 - Multi-developpers capability, with blocking functions at file or project level.
 
 - Versionning system, with Version, Major, Minor and Build numbering system
+
     Versions are divided in :
+
       - Development version
       - Beta test version
       - Production version
