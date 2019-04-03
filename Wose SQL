@@ -1,0 +1,58 @@
+Create Or Replace function woseDocSQL()
+Returns Long VarChar
+Begin
+	/*include woseDocConstants include*/
+	
+	DIM Long VarChar = lHTML ;
+	DIM Integer = la, lCount, lCodeBlob ;
+	WebVars a:0 ;
+	
+	If la = {saveBlobIni} Then
+		If lCodeBlob >= 0 Then
+			truncate table  sgsVideoBuffer ;
+			commit work ;
+			Insert Into sgsVideoBuffer(CodeDoc, videoIndex, videoName, videoType, videoBuffer) Values (lCodeBlob, limgIndex, lImgName, lImgType, limgSrc) ;
+			commit work ;
+		End If ;
+		Return lCodeBlob ;
+
+	ElseIf la = {saveBlobCpl} Then
+		If lCodeBlob >= 0 Then
+			Insert Into sgsVideoBuffer(CodeDoc, videoIndex, videoName, videoType, videoBuffer) Values (lCodeBlob, limgIndex, lImgName, lImgType, limgSrc) ;
+			commit work ;
+			Set lCount = 0 ;
+			Select(sum(len(videoBuffer))) Into lCount From sgsVideoBuffer Where CodeDoc = lCodeBlob ;
+		End If ;
+		Return lCodeBlob ;
+
+	ElseIf la = {saveBlobEnd} Then
+		/*  ajuster la largeur de la fenetre des pieces jointes .   */
+		
+		Set lWidth = If lCodeCircuit=37 Then 330 Else 420 EndIf ;
+		If lCodeBlob >= 0 Then
+			for lbv as csv cursor for Select videoBuffer From sgsVideoBuffer Where CodeDoc = lCodeBlob Order By videoIndex
+			do
+				Set lVideoBuffer = lVideoBuffer || videoBuffer ;
+			End for ;
+            if isnull(lCodeDocument, 0)=0 then 
+                Insert	Into sgcPieceJointe(refDoc, nomDoc, typeDoc, pieceJointe) 
+                Select	'anonyme', Replace(lImgName, '''', ''), lImgType, http_decode(lVideoBuffer) ;
+            else 
+    			Insert	Into sgcPieceJointe(CodeDocument, refDoc, nomDoc, typeDoc, pieceJointe) 
+    			Select	CodeDocument, codecircuit, Replace(lImgName, '''', ''), lImgType, http_decode(lVideoBuffer) From sgcDocument Where CodeDocument = lCodeDocument ;
+    			
+    			select codeDocPar into newCodeDocument from sgcDocument where CodeDocument = lCodeDocument and codecircuit=38 and codeTypeDocument=17 ;
+    			if isnull(newCodeDocument, 0) >0 then 
+    			    insert into sgcPieceJointe(CodeDocument, refDoc, nomDoc, typeDoc, pieceJointe)
+    			    select newCodeDocument, refDoc, nomDoc, typeDoc, pieceJointe ;
+    			    
+    			end if ;
+			end if ;
+			commit work ;
+		End If ;
+	else
+	    set lHTML = '' ;
+	end if ;
+	
+	Return csconvert(lHTML, 'UTF-8') ;
+End
