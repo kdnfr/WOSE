@@ -1,0 +1,55 @@
+/* include file */
+/* woseDocConstants */
+
+/* include woseDocConstants include */
+
+/*CONST
+	getView = 101 ;
+	getSource = 102 ;
+	getSourceFromServer = 1023 ;
+	getTestURL = 103 ; 
+	getConstants = 104 ;
+	getVersion = 106 ;
+	getVersions = 107 ;²
+	delTestURL = 109 ;
+	saveDoc = 202 ;
+	saveBrouillon = 205 ;
+	saveEditorContext = 207 ;
+	getEditorContext = 208 ;
+	executeDoc = 212 ;
+	delRecreate = 216 ;
+	makeVue = 222 ;
+	
+	loadProjets = 301 ;
+	closeOpenProjectFiles = 308 ;
+	refreshProjet = 320 ;
+	addDocToProj = 321 ;
+	delDocFromProj = 329 ;
+	newProjet = 366 ;
+	requestFileRW = 390 ;
+    
+    importer = 701 ;
+    importerMaster = 702 ;
+	loadProjectFiles = 10001 ;
+	openProjectDescription = 10002 ;
+	saveProjectDescription = 10003 ;
+	getProjectVersion = 10006 ;
+	loadReferenceFiles = 10101 ;
+	importReferenceFile = 10102 ;
+	
+	loadReferenceBlobs = 10111 ;
+	importReferenceBlob = 10112 ;
+	
+	loadProductionFiles = 10201 ;
+	importProductionFile = 10202 ;
+	
+	loadProductionBlobs = 10211 ;
+	importProductionBlob = 10212 ;
+	
+	woseCapable = 11010 ;
+	getHTTPInfo = 19000 ;
+	loadImageList = 20001 ;
+	saveBlobIni = 22001 ;
+    saveBlobCpl = 22002 ;
+    saveBlobEnd = 22003 ;
+CONST*/
