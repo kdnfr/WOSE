@@ -19,11 +19,14 @@ Using a simple web-bowser, WOSE provides :
       - Production version
       - Abandonned version
     Easy way to upgrade or downgrade a version for a file or a project
+
 - File system is divided in
+
     Projects
       - Corresponds generally to an application, or part of it
       - groups a number of files of different types
     Files
+    
       - SQL tables, procedures, functions, views, services, events, triggers etc....
       - HTML
       - Javascript
