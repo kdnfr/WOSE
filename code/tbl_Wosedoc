@@ -1,0 +1,28 @@
+create table Wosedoc (
+	 "Codedoc"                       integer primary key default autoincrement 
+	, "Codeparent"                    integer
+	, "Docdate"                       timestamp
+	, "Docend"                        timestamp
+	, "Dbname"                        char(64)
+	, "Projname"                      char(64)
+	, "Doctype"                       char(64)
+	, "Docname"                       char(64)
+	, "Source"                        long varchar
+	, "Comp"                          long varchar
+	, "Testurl"                       char(1024)
+	, "Version"                       integer
+	, "Revision"                      integer
+	, "Compilation"                   integer
+	, "Aliasname"                     char(32)
+	, "Opendocbyuser"                 char(64)
+	, "Syncname"                      char(64)
+	, "Synctime"                      timestamp
+	, "Domain"                        char(32)
+	, "Compdate"                      timestamp
+	, "Inproduction"                  integer
+	, "Respmaj"                       char(32)
+	, "Resptcpip"                     char(32)
+	, "Brouillon"                     long varchar
+	, "Editorcontext"                 long varchar
+	, "Maintenance"                   long varchar
+)
