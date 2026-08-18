@@ -1,0 +1,33 @@
+create procedure "dba"."SQLMessage"( in "lSQL" long varchar,"la" integer default 0 ) 
+on exception resume
+begin
+  declare "lCodeMSG" integer;
+  declare "lUID" char(255);
+  if "VarExists"('SessionUID') = 0 then create variable "SessionUID" char(1024) end if;
+  if "VarExists"('lCallee') = 0 then create variable "lCallee" char(1024) end if;
+  begin try
+    set "lUID" = if "isnull"("SessionUID",'') = '' then 'dba' else "lcase"("SessionUID") endif;
+    set "lSQL" = "Trim"("IsNull"("lSQL",''));
+    if "right"("lSQL",9) = 'clear all' then
+      truncate table "dba"."sqlMessage";
+      set "lSQL" = 'All SQL Messages cleared @ ' || "dateformat"("now"(),'yyyy-mm-dd hh:mm:ss') || ''
+    elseif "right"("lSQL",5) = 'clear' then
+      delete from "sqlMessage" where "respMsg" = "lUID";
+      set "lSQL" = 'SQL Messages from ' || "lUID" || ' cleared @ ' || "dateformat"("now"(),'yyyy-mm-dd hh:mm:ss') || ''
+    elseif "right"("lSQL",5) = 'error' then
+      select 'error : ' || "error_message"() || ' at line ' || "error_line"() || ' in proc ' || "error_procedure"() || ', Trace stack: ' || "list"('' || "procName" || ' (' || "lineNumber" || ')',' / ' order by "stackLevel" asc) || '.' into "lSQL" from "sa_stack_trace"() where "stackLevel" > 1
+    end if;
+    if "lSQL" <> '' then
+      set "lSQL" = "lUID" || '&nbsp;:&nbsp;' || "Trim"("Replace"("lSQL",' ','&nbsp;'));
+      select top 1 "codeMSG" into "lCodeMSG" from "sqlmessage" where "msg" = "lSQL" order by "codeMSG" asc;
+      if "IsNull"("lCodeMSG",0) > 0 then
+        update "sqlmessage" set "msgcount" = "isnull"("msgcount",0)+1,"datemsg" = "now"(),"respMSG" = "lUID" where "codemsg" = "lCodeMSG"
+      else
+        insert into "SQLMessage"( "msgcount","MSG","respMsg","datemsg" ) values( 1,"Trim"("Replace"("lSQL",' ','&nbsp;')),"lUID","now"() ) 
+      end if
+    end if
+  end try
+  begin catch
+    message "error_message"() to console
+  end catch
+end
