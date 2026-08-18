@@ -55,14 +55,23 @@ Templating
       
 
 SYSTEM CODING :
+
     ROOT sends incoming requests to the "apache' procedure which retrieves the data, formatted in consequence.
+    
     The requests may be of type :
+    
         HTML page
+
         JS document
+        
         CSS document
+        
         Image
+        
         Video
 
     "HTML page" is principally formed in a function which name corresponds to the URL name and handles URL parameters as function's parameters
+    
     The HTML "page - function" handles JS, Css, images, videos by requesting "apache" 
+    
     The JS, CSS, images, videos are retrieved from the woseBlob table
