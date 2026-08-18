@@ -1,0 +1,19 @@
+create function "dba"."fnMatch"( in "v" long varchar default '',in "nl" integer default 0,in "sp1" char(255) default '{',in "sp2" char(255) default '}' ) 
+returns long varchar
+begin
+  declare "la","lld","lf","llf","lldi","llfi","lldii","llfii" integer;
+  select "ld","lf","ldi","lfi","ldii","lfii","f"
+    into "lld","llf","lldi","llfi","lldii","llfii","lf"
+    from(select "Locate"("v","sp1","nl"+1) as "ld",
+        "Locate"("v","sp2","ld"+1) as "lf",
+        "Locate"("v","Left"("sp1",1),"ld"+1) as "ldi",
+        "Locate"("v","sp2","ldi"+1) as "lfi",
+        "Locate"("v","Left"("sp1",1),"ldi"+1) as "ldii",
+        "Locate"("v","sp2","lfi"+1) as "lfii",
+        if "ldi" > 0 and "ldi" < "lf" then if "ldii" < "lfi" then "lfii" else "lfi" endif else "lf" endif as "f") as "mm";
+  if "IsNull"("lld",0) > 0 and "IsNull"("lf",0) > "lld" then
+    return "SubStr"("v","lld","lf"-"lld"+"len"("sp2"))
+  else
+    return ''
+  end if
+end
