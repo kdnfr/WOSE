@@ -64,27 +64,10 @@ end if ;
         select cx.codeConnect into sessionID from webconnexion cx where scanCode = left(lSession, 9) ;
     end if ;
     select cx.codeConnect, u.UID into lCodeUser, sessionUID from webconnexion cx join webUser u where cx.codeConnect = SessionID ;
-    if sessionID != 2 then
-        //select 2, 'KDN' into sessionID, sessionUID ;
-    end if ;
-    if lURL in ('wosedoc','isql','sqlMessages') or left(lURL, 7)='arduino'  or left(lURL, 8)='ademicon' then
-        select 2, 'KDN' into sessionID, sessionUID ;
-    end if ;
+
     select cx.codeConnect, u.UID into lCodeUser, sessionUID from webconnexion cx join webUser u where cx.codeConnect = SessionID ;
     
-    begin try
-        if lURL = 'aaPhotosd' then
-            set lHTML = aaPhotos() ;
-        	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
-            return lHTML ;
-		end if ;
-        if lURL = 'arduinos' then
-            //all sqlmessage('apache.url=<%lURL%>, la=<%la%>.') ;
-            set lHTML = arduino() ;
-        	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
-            return lHTML ;
-		end if ;
-    end try begin catch call sqlMessage('@@' || error_message()) end catch ;
+
     begin try
         if lURL = 'cnx' then
             if (select count() from webConnexion where codeConnect = sessionID) = 0 then
@@ -153,25 +136,6 @@ end if ;
     end if ;
 
         
-    /********************************************************************************************
-    
-        Particularité de traitements pour les besoins des distributions
-    
-    ********************************************************************************************/
-    
-    if db_Property('alias')='BLDEPLOY' then
-        select 2, 'kdn', '' into sessionID, sessionUID, @Cookie ;
-        insert into webConnect (codeConnect, lastActivity) on existing update select sessionID, now() ;
-        insert into webConnexion(codeConnect, TCPIP)  on existing update select sessionID, lTCPIP ;
-    end if ;
-
-    if lURL in ('PSSSynchro', 'PSSDeploy', 'PSSInstal') and db_Property('alias')!='BLPSS' then
-        execute immediate 'set lHTML = <%lURL%>(0)' ;
-    	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
-        Select	lHTML ;
-        return ;
-    end if ;
-    
     /********************************************************************************************
     
         Vérification du style de requete (GET ou POST)
