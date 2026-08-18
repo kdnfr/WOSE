@@ -1,4 +1,9 @@
-create function "dba"."fnMatch"( in "v" long varchar default '',in "nl" integer default 0,in "sp1" char(255) default '{',in "sp2" char(255) default '}' ) 
+create function "dba"."fnMatch"(
+  in "v" long varchar default '',
+  in "nl" integer default 0,
+  in "sp1" char(255) default '{',
+  in "sp2" char(255) default '}'
+) 
 returns long varchar
 begin
   declare "la","lld","lf","llf","lldi","llfi","lldii","llfii" integer;
