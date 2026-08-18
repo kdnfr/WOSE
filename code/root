@@ -1,0 +1,11 @@
+create SERVICE root
+TYPE 'RAW' 
+URL ON
+AUTHORIZATION OFF 
+USER DBA 
+As 
+	Call dba.apache(:URL)
+
+/****************************************************************************************
+		Site principal d'essais de la base APACHE
+*******************************************************************************************/
