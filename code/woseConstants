@@ -1,0 +1,24 @@
+create function "dba"."woseConstants"( in "lConstantes" long varchar ) 
+returns long varchar
+begin
+  declare "lHTML","lHTML1","lHTML2" long varchar;
+  declare "nl","ln" integer;
+  while "locate"("lConstantes",'[select') > 0 loop
+    set "nl" = "locate"("lConstantes",'[select');
+    if "nl" > 0 then
+      set "lHTML" = "trim"("fnMatch"("lConstantes",1,'[select',']'));
+      set "ln" = "locate"("lConstantes","lHTML");
+      if "ln" > 2 then
+        set "lHTML1" = "substr"("lHTML",2,"len"("lHTML")-2);
+        begin try
+          execute immediate 'set lHTML2=(' || "lHTML1" || ')';
+          set "lConstantes" = "replace"("lConstantes","lHTML","lHTML2")
+        end try
+        begin catch
+          set "lConstantes" = "replace"("lConstantes","lHTML","lHTML2")
+        end catch
+      end if
+    end if
+  end loop;
+  return "lConstantes"
+end
