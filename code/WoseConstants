@@ -1,4 +1,4 @@
-ALTER FUNCTION "dba"."woseConstants"( IN "lConstantes" LONG VARCHAR ) 
+CREATE OR REPLACE FUNCTION "dba"."woseConstants"( IN "lConstantes" LONG VARCHAR ) 
 RETURNS LONG VARCHAR
 BEGIN
   DECLARE "lHTML"       LONG VARCHAR;
