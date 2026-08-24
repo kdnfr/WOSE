@@ -1,0 +1,46 @@
+ALTER FUNCTION "dba"."woseConstants"( IN "lConstantes" LONG VARCHAR ) 
+RETURNS LONG VARCHAR
+BEGIN
+  DECLARE "lHTML"       LONG VARCHAR;
+  DECLARE "lHTML1"      LONG VARCHAR;
+  DECLARE "lHTML2"      LONG VARCHAR;
+  DECLARE "nl"          INTEGER;
+  DECLARE "ln"          INTEGER;
+  DECLARE "sql_command" LONG VARCHAR;
+
+  -- Recherche de la première occurrence
+  SET "nl" = "LOCATE"("lConstantes", '[select');
+
+  WHILE "nl" > 0 LOOP
+    -- Récupération de la sous-chaîne correspondante via fnMatch
+    SET "lHTML" = "TRIM"("dbo"."fnMatch"("lConstantes", 1, '[select', ']'));
+    SET "ln"    = "LENGTH"("lHTML");
+
+    IF "ln" > 2 THEN
+      -- Extraction de la requête SQL (on retire le '[' au début et le ']' à la fin)
+      SET "lHTML1" = "SUBSTR"("lHTML", 2, "ln" - 2);
+      SET "lHTML2" = NULL; -- Réinitialisation indispensable pour éviter de propager l'ancien résultat en cas d'erreur
+
+      BEGIN TRY
+        -- Construction d'une commande SQL propre
+        SET "sql_command" = 'SET lHTML2 = (' || "lHTML1" || ')';
+        EXECUTE IMMEDIATE "sql_command";
+        
+        -- Si l'exécution réussit, on remplace la balise par son résultat SQL
+        SET "lConstantes" = "REPLACE"("lConstantes", "lHTML", ISNULL("lHTML2", ''));
+      END TRY
+      BEGIN CATCH
+        -- En cas d'échec SQL, on remplace par un message d'erreur explicite au lieu de corrompre le texte avec une ancienne valeur lHTML2
+        SET "lConstantes" = "REPLACE"("lConstantes", "lHTML", '[ERR: SQL Invalid (' || ERROR_MESSAGE() || ')]');
+      END CATCH;
+    ELSE
+      -- Sécurité : Évite une boucle infinie si [select] est vide ou mal formé
+      SET "lConstantes" = "REPLACE"("lConstantes", "lHTML", '');
+    END IF;
+
+    -- Recherche de l'occurrence suivante
+    SET "nl" = "LOCATE"("lConstantes", '[select');
+  END LOOP;
+
+  RETURN "lConstantes";
+END
