@@ -1,0 +1,446 @@
+Create or replace procedure apache(lURL Long VarChar Default Null)
+On Exception Resume
+
+/*CONST 
+download = 971384265 ;
+CONST*/
+
+Begin
+	DIM Long VarChar = lHTML, lBrowserFab, lAgent, lTemp, @Cookie, lTypePJ, lDOCX, lModule ;
+	DIM Integer = la, lCode, lCodOption, lCodePJ, lClientType, lClientActif, lCount, lcxt, lCodeConnexion,lmax, lPageDispo, lMenuValide, lUserValide ;
+	DIM Numeric(20,16) = lLocationLatitude, lLocationLongitude, lLat, lLng ;
+	DIM Numeric(16,3) = lDistance ;
+	DIM Char(255) = lTypeDoc, HOSTName, lPhoneNumber, lFileName ;
+	DIM Long Binary = lBinary ;
+	
+	GLOBAL Int = sessionID, lCodeUser, lCNX ;
+	GLOBAL Char(4096) = lCookie, lSession, sessionUID, sessionUIDBA, OpSys, lCallingModule, lModulePrincipal, lm, lOnSuccess, lAppInfo ;
+	GLOBAL Timestamp = sessionCT, lGeoDate ;
+	GLOBAL Date = lDateDuJOur ;
+	GLOBAL Char(1024) = myURL, lMessage, lDebug, lCallee, lApp, lTCPIP, lwText ;
+	GLOBAL Char(255) = lGeoUID, lGetPost, lTDBAnalytique ;
+	GLOBAL Integer = lTDBCodeExercice, lTDBCategorie, lTDBGroupe, lTDBRubrique, lTDBDetail, lTDBInclureAnalytique ;
+
+	WebVars a:0, code:0, CodePJ:0, ApacheTO:0, clientActif:0, m, Module, onSuccess:'', lat:0, lng:0, geoDate:now(), locationLatitude:0, locationLongitude:0, phoneNumber:'' ;
+    WebVars wText:'', fileName:'', notif:'' ;
+    
+    /********************************************************************************************
+    
+        Initialisation de paramètres globaux
+    
+    ********************************************************************************************/
+    
+	Set	lTCPIP = connection_Property('NodeAddress') ;
+	Set	lAppInfo = connection_Property('AppInfo') ;
+	Set	HOSTName = http_header( 'Host' ) ;
+	Set myURL = lURL ;
+
+    /********************************************************************************************
+    
+        URL par défaut
+    
+    ********************************************************************************************/
+if locate(lURL, '.')=0 then
+    call sqlmessage('@@:' || lURL || '!') ;
+end if ;
+    
+	If IsNull(lURL, '') = '' Then Set lURL='BLAccueil' ; EndIf ;
+
+    /********************************************************************************************
+    
+        Lecture des cookies du site appelé
+    
+    ********************************************************************************************/
+    
+	Set	@Cookie = http_header('cookie') ;
+    select    regexp_substr(@cookie || ';', 'cSession=[a-zA-Z!0-9]{1,128}') cSession 
+            , regexp_substr(@cookie || ';', 'cApache=[0-9]{1,128}') cApache
+            , fnSplit(cApache, 2, '=') cSID
+            , fnSplit(cSession, 2, '=') cSSN
+    into    lTemp, lCookie, SessionID, lSession ;
+    if isnull(lSession, '')!='' then
+        select cx.codeConnect into sessionID from webconnexion cx where scanCode = left(lSession, 9) ;
+    end if ;
+    select cx.codeConnect, u.UID into lCodeUser, sessionUID from webconnexion cx join webUser u where cx.codeConnect = SessionID ;
+    if sessionID != 2 then
+        //select 2, 'KDN' into sessionID, sessionUID ;
+    end if ;
+    if lURL in ('wosedoc','isql','sqlMessages') or left(lURL, 7)='arduino'  or left(lURL, 8)='ademicon' then
+        select 2, 'KDN' into sessionID, sessionUID ;
+    end if ;
+    select cx.codeConnect, u.UID into lCodeUser, sessionUID from webconnexion cx join webUser u where cx.codeConnect = SessionID ;
+    
+    begin try
+        if lURL = 'aaPhotosd' then
+            set lHTML = aaPhotos() ;
+        	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+            return lHTML ;
+		end if ;
+        if lURL = 'arduinos' then
+            //all sqlmessage('apache.url=<%lURL%>, la=<%la%>.') ;
+            set lHTML = arduino() ;
+        	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+            return lHTML ;
+		end if ;
+    end try begin catch call sqlMessage('@@' || error_message()) end catch ;
+    begin try
+        if lURL = 'cnx' then
+            if (select count() from webConnexion where codeConnect = sessionID) = 0 then
+                set lTemp = '0Déconnecté' ;
+            else
+                set lTemp = fnPSCParam('maintenance',3) ;
+            end if ;
+            select isnull(lTemp, '') ;
+            return ;
+		end if ;
+    end try begin catch call sqlMessage('@@' || error_message()) end catch ;
+    
+    /********************************************************************************************
+    
+        Quand la = 0, la plateforme ne charge que des pages sans paramètres additionnels
+        Les contrôles qui suivent sont effectués à ce moment là pour ne pas surcharger les requêtes
+    
+    ********************************************************************************************/
+    
+    if la=0 then
+        if (Select count() from webUser u join webconnexion cx on cx.codeUser = u.codeUser where u.codeuser = sessionID) = 0 then
+            set lCodeUser = 1;
+            set sessionID = 1;
+        end if;
+         
+        /********************************************************************************************
+            éliminer les connexions caduques avec délai >= lMax
+        ********************************************************************************************/
+    
+        set lMax = fncomptaparam('timeout') ;
+        if isnull(lMax, 0)<60 then set lMax = 60 endif ;
+        
+        begin try
+            delete webconnexion where hours(lastaccess, now())>8 and codeuser > 1 ;
+            delete webconnexion where minutes(lastaccess,now())>(lmax*1) ;
+        end try begin catch end catch ;
+
+        begin try
+            delete webConnect where codeconnect not in (select codeconnect from webconnexion) and codeconnect>1 ;
+        end try begin catch end catch ;
+    end if ;
+    
+    /********************************************************************************************
+    
+        Reprendre les données de connexion pour la SessionID validée
+    
+    ********************************************************************************************/
+    
+    select count() into lCount from webconnexion where codeconnect = sessionID ;
+    if lCount=1 and sessionID>0 then
+        select u.codeuser, u.UID, ScanCode into lCodeUser, sessionUID, lTemp from webUser u join webconnexion cx where u.codeuser = sessionID ;
+        if isnull(lTemp, '0')= '0' then
+            update webconnexion set scanCode = fnRand(1000000000,1) where codeConnect = sessionID ;
+            select scanCode || clientuuid into lSession from webConnexion where codeconnect = sessionID ;
+            set @Cookie = 'cApache=; cSession=;' ;
+            set lCookie = 'cSession=<%lSession%>;cApache=<%sessionID%>;' ;
+        elseif left(lSession, 9) != lTemp then
+            select scanCode || clientuuid into lSession from webConnexion where codeconnect = sessionID ;
+            set @Cookie = 'cApache=; cSession=;' ;
+            set lCookie = 'cSession=<%lSession%>;cApache=<%sessionID%>;' ;
+        end if ;
+    else 
+        set @Cookie = 'cApache=;cSession=;' ;
+        set lCookie = 'cSession=;cApache=1;' ;
+    end if ;
+
+        
+    set lGetPost = HTTP_HEADER('@HttpMethod')%> / <%HTTP_HEADER('@HttpURI') ;
+
+    /********************************************************************************************
+    
+        Réponse à des requêtes de vérification
+    
+    ********************************************************************************************/
+    
+    if lURL = 'wseURLResponder' or lURL = 'wseURLRequester' then
+        select 'hello! <%lTCPIP%>, This is ' || db_property('alias') ;
+        return ;
+    ElseIf lURL in ('cnxAct') Then
+        Update webConnexion Set LastAccess = now() Where codeConnect = sessionID ;
+        select 0 ;
+        return ;
+	ElseIf lURL = 'cnxTO' Then
+		if sessionID>1 then
+            select hours(isnull(lastAccess, today()),now()) from webconnexion where codeconnect = sessionID ;
+		else
+		    select 0 ;
+		end if ;
+		Return ;
+    ElseIf lURL = 'pscNotification' Then
+	    Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+	    select pscNotification() ;
+	    return ;
+    ElseIf lURL = 'sqlMessages' Then
+		Execute Immediate 'Select <%lURL%>() Into lHTML' ;
+		Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+		Select	csconvert(lHTML, 'UTF-8') ;
+		Return ;
+	end if ;
+
+    /********************************************************************************************
+    
+        test de download
+        ajax("?a=971384265&module="+escape("d://database//kd//export//kd.zip"), function(v){console.log(v)})
+        dbInit?a=971384265&module=C:\database\BL\dbinit.txt
+        http://83.159.44.114:8088/dbInit?a=971384265&module=D:\database\amort\Philippines02.mp4
+    
+    ********************************************************************************************/
+    begin try
+    if la = {download} and isnull(lModule, '') != '' then
+        select optIndex into lCount from weboptions where optValue = 'mobible' ;
+        if lCount<0 then
+            set lModule = left(fnPSCParam('dbFilePath'), locate(fnPSCParam('dbFilePath'),'\',-1)) || replace(replace(lModule, '.db', ''), '.log', '') || '\' || lModule ;
+        else
+            set lModule = left(fnPSCParam('dbFilePath'), locate(fnPSCParam('dbFilePath'),'\',-1)) || replace(replace(lModule, '.db', ''), '.log', '')  || '\Backup\' || lModule ;
+        end if ;
+        //all sqlmessage('@@' || lModule) ;
+        set lBinary = xp_read_file(lModule) ;
+        //all sqlmessage('@@<%lModule%> / len = <%len(lBinary)%>.') ;
+        Call dbo.sa_set_http_header( 'content-type', 'application/octet-stream' );
+		select lBinary ;
+        return ;
+    end if ;
+    end try begin catch call sqlMessage(error_message()) end catch ;
+    
+    /********************************************************************************************
+        ajax("?a=971384265&module="+escape("d://database//kd//export//kd.zip"), function(v){console.log(v)})
+        Toutes les requêtes de type PDF, CSS, JavaScript, Images n'exigent pas de SessionID
+    
+    ********************************************************************************************/
+        
+	If lURL='piecejointe.pdf' Then
+
+        /********************************************************************************************
+        
+            Pour des requêtes de type piecejointe.pdf, il faut un lCodePJ (codePieceJointe de la table sgcPieceJointe)
+            Ou un lCode (CodeDocument de la table sgcPieceJointe)
+        
+        ********************************************************************************************/
+
+        If IsNull(lCode, 0)!=0 Then 
+            select isnull(CodeDocOrig, codeDocument) into lCode from sgcdocument where codedocument = lCode ;
+            select first codePieceJointe into lCodePJ from sgcpiecejointe pj join sgcdocument d on pj.codeDocument in (d.codeDocument, d.codedocpar, codedocorig) where d.codeDocument = lCode order by pj.codeDocument ;
+        end if ;
+            
+        Update webConnexion Set TCPIP = lTCPIP, LastAccess = now(), LastApp = lURL Where codeConnect = sessionID ;
+
+        if isnull(lCodePJ, 0)=0 or isnull((select len(piecejointe) From sgcPieceJointe Where codePieceJointe = lCodePJ), 0) < 200 then set lCodePJ = 2; endif ;
+
+        if (select count() from sgcPieceJointe where codePieceJointe=lcodepj and left(piecejointe, 4)='data')>0 then
+            Call dbo.sa_set_http_header( 'content-type', 'application/pdf');
+            Select base64_decode(substr(pieceJointe, 29)) From sgcPieceJointe Where codePieceJointe = lCodePJ ;		
+        else
+            Call dbo.sa_set_http_header('content-type', 'application/pdf');
+            Call dbo.sa_set_http_header('content-Encoding', 'gzip');
+            Select pieceJointe From sgcPieceJointe Where codePieceJointe = lCodePJ ;
+		end if ;
+
+		return ;   
+
+	ElseIf lURL='piecejointe.jpg' Then
+		If IsNull(lCode, 0)!=0 Then 
+			Select min(IsNull(CodeDocOrig, CodeDocument) )  Into lCode From sgcDocument Where lCode in (CodeDocOrig, CodeDocument ) ;
+
+			Select base64_decode(Replace(SubStr(icone, Locate(icone, ',')+1  ), ' ', '+' ) )Into lHTML From sgcPieceJointe Where CodeDocument = lCode And typeDoc = 'scanCompta';
+
+			Call dbo.sa_set_http_header( 'content-type', 'image/jpg');
+
+			Call dbo.sa_set_http_header('content-Encoding', 'gzip');
+
+			Select compress(lHTML, 'gzip') ;
+		End If ;
+		Return ;
+
+
+	ElseIf Right(lURL, 4)='.pdf' Then
+		if isnull(lCode, 0) = 0 then
+		    select top 1 codepieceJointe into lCode from sgcPieceJointe where nomdoc = trim(lURL) order by codePieceJointe desc ;
+		end if ;
+		call sqlmessage('@@code=<%lCode%>/' || lURL || '/') ;
+		Call dbo.sa_set_http_header( 'content-type', 'application/pdf');
+		if isnull(lCode, 0) = 0 then
+		    select 'Page non trouvée' ;
+		    set lCode = 1 ;
+		else
+		    Select base64_decode(SubStr(pieceJointe, Locate(pieceJointe, ',')+1)) From sgcPieceJointe Where codePieceJointe = lCode ;
+		end if ;
+		Return ;
+
+	End If ;
+
+	If Right(lURL, 4) = '.css' Then
+        /********************************************************************************************
+        
+            Pour des requêtes de type CSS, deux cas de figure pour une URL de type 'xxx/yyy/ccc.css'
+            qui devient soit 'xxx_yyy_ccc.css' (recherché en premier) 
+                        ou 'ccc.css' si le premier n'existe pas 
+                        
+            Les CSS peuvent être dynamiques et comporter des commandes SQL, donc elles passent par un
+            
+                EXECUTE IMMEDIATE ....
+        
+        ********************************************************************************************/
+
+		Set lHTML = '' ;
+		Select top 1 IsNull(Comp, Source) Into lHTML From WoseDoc Where DocType = 'w3css' And DocEnd is Null And DocName = Replace(Replace(lURL, '.css', ''), '/', '_') Order By DocDate desc ;
+		
+		If len(Trim(IsNull(lHTML, '')))=0 Then
+			Select top 1 IsNull(Comp, Source) Into lHTML From WoseDoc Where DocType = 'w3css' And DocEnd is Null And DocName = Replace(SubStr(lURL, Locate(lURL, '/', -1)+1 ), '.css', '') Order By DocDate desc ;
+		End If ;
+		    	
+		/* les css peuvent être dynamiques, on résoud les requêtes : */
+		Execute Immediate 'set lHTML =''' || lHTML || '''';
+		
+		Call dbo.sa_set_http_header( 'content-type', 'text/css' );
+		Select CSConvert(lHTML, 'UTF-8') ;
+		Return ;
+
+	ElseIf Right(lURL, 3) = '.js' Then
+        /********************************************************************************************
+        
+            Pour des requêtes de type JavaScript, même procédé que pour les css ('xxx/yyy/jjj.js'
+            qui devient soit 'xxx_yyy_jjj.js' (recherché en premier) 
+                        ou 'jjj.js' si le premier n'existe pas 
+        
+        ********************************************************************************************/
+	    Set lHTML = '' ;
+
+		Select top 1 IsNull(Comp, Source) Into lHTML From WoseDoc Where DocType = 'w3js' And DocEnd is Null And replace(DocName, '-', '_') = Replace(Replace(Replace(Replace(lURL, '.js', ''), '/', '_'), '-', '_'), 'ace_mode_', '') Order By DocDate desc ;
+
+		If len(Trim(IsNull(lHTML, '')))=0 Then
+			Select top 1 IsNull(Comp, Source) Into lHTML From WoseDoc Where DocType = 'w3js' And DocEnd is Null And DocName = Replace(Replace(SubStr(lURL, Locate(lURL, '/', -1)+1 ), '.js', ''), 'ace_mode_', '')  Order By DocDate desc ;
+		End If ;
+		
+		If len(Trim(IsNull(lHTML, '')))=0 and db_Property('alias')!='BLPSS' Then
+			begin try
+    			Select top 1 IsNull(Comp, Source) Into lHTML From r_WoseDoc Where DocType = 'w3js' And DocEnd is Null And replace(DocName, '-', '_') in (Replace(Replace(Replace(Replace(lURL, '.js', ''), '/', '_'), '-', '_'), 'ace_mode_', ''), Replace(Replace(Replace(Replace(lURL, '.js', ''), '/', '_'), '-', '_'), 'ace_mode_', '') ) Order By DocDate desc ;
+    
+        		If len(Trim(IsNull(lHTML, '')))=0 Then
+        			Select top 1 IsNull(Comp, Source) Into lHTML From r_WoseDoc Where DocType = 'w3js' And DocEnd is Null And DocName = Replace(Replace(SubStr(lURL, Locate(lURL, '/', -1)+1 ), '.js', ''), 'ace_mode_', '')  Order By DocDate desc ;
+        		End If ;
+		    end try begin catch end catch ;
+		End If ;
+		
+		
+		Begin try 
+			Set lHTML = replace(replace(lHTML, '{sessionID}', isnull(sessionID, 0)), '{sessionUID}', isnull(sessionUID, '')) ;
+		End try Begin catch End catch ;
+
+		Call dbo.sa_set_http_header( 'content-type', 'text/javascript' );
+		
+		Select CSConvert(lHTML, 'utf-8') ;
+		
+		Return ;
+	ElseIf Right(lURL, 4) = '.wav' Or Right(lURL, 4) = '.mp3' Then
+		//Select xp_read_file('c:\ringtone01.wav') Into lDOCX ;
+		Select first Objet Into lDOCX From woseBlob Where URL = lURL ;
+		If Left(lDOCX, 11)='data:audio/' Then
+			Set lDOCX = SubStr(lDOCX, Locate(lDOCX, 'base64,')+7) ;
+
+		End If ;
+		Set lDOCX = BASE64_DECODE(lDOCX) ;
+
+		Call dbo.sa_set_http_header( 'content-type', 'audio/<%Right(lURL, 3)%>' );
+		Select lDOCX  ;
+		Return ;
+
+	ElseIf Right(lURL, 4) = '.map' Then
+        Select top 1 Source Into lHTML From WoseDoc Where DocType = 'map' And DocEnd is Null And replace(DocName, '-', '_') = Replace(Replace(Replace(Replace(lURL, '.map', ''), '/', '_'), '-', '_'), 'ace_mode_', '') Order By DocDate desc ;
+
+	    Select CSConvert(lHTML, 'utf-8') ;
+	    return ;
+	ElseIf Right(lURL, 4) in ('.jpg', 'jpeg', '.gif', '.png', '.bmp', '.ico' ) Then
+        /********************************************************************************************
+        
+            Requêtes de type images
+        
+        ********************************************************************************************/
+		
+		Set lURL = Replace(lURL, '/', '_') ;
+		
+		Select  if left(objet, 4)='data' then base64_decode(SubStr(Objet, Locate(Objet, ',')+1)) else Objet endif
+		Into    lHTML
+		From    woseBlob 
+		Where   URL = lURL ;
+		
+		if len(isnull(lHTML, ''))=0 and db_Property('alias')!='BLPSS' then
+    		begin try
+    		    insert into woseBlob(URL, description, categorie, objType, objSize, Objet, Maintenance) select first URL, description, categorie, objType, objSize, Objet, Maintenance from r_woseBlob where URL = lURL ;
+		    end try begin catch end catch ;
+		    
+    		Select  if left(objet, 4)='data' then base64_decode(SubStr(Objet, Locate(Objet, ',')+1)) else Objet endif
+    		Into    lHTML
+    		From    woseBlob 
+    		Where   URL = lURL ;
+        end if ;
+        
+		Call dbo.sa_set_http_header( 'content-type', 'image/' || Right(Replace(lURL, '.jpeg', '.jpg'), 3) );
+        
+        select lHTML ;
+        
+        return ;		
+	endif ;
+	
+	if SessionID > 1 then
+        /********************************************************************************************
+        
+            Requêtes HTML pour lesquelles une SessionID vaide est nécessaire
+        
+        ********************************************************************************************/
+        
+        select  MessageAcces into lTemp from (
+            select  if pageDispo=0 then 
+                        'Page non trouv&eacute;e .<%lURL%>'
+                    else if menuValide+UserValide=1 and dev=0 and db_Property('alias')!='BLDEPLOY' then
+                        'Acc&egrave;s refus&eacute .'
+                    endif endif MessageAcces
+                , isnull(trim(left(lURL, locate(lURL || '?', '?')-1)), '') trimmedURL 
+                , ( select count(distinct w.codedoc) from wosedoc w where w.docname = isnull(trim(left(lURL, locate(lURL || '?', '?')-1)), '') and docend is null and doctype='func' and inproduction=10)  as pageDispo
+                , ( select count(distinct m.codeMenu) from sgsMenu m where m.app = isnull(trim(left(lURL, locate(lURL || '?', '?')-1)), '')  ) as menuValide
+                , ( select first 1 from sgsMenu m #join sgsMenu mp on mp.codeParent = m.codeMenu join sgsUser_Menu um on um.codeMenu in (m.codeMenu, mp.codeMenu) where codeuser = lCodeUser and trimmedURL in ( trim(left(m.app, locate(m.app || '?', '?')-1)), trim(left(mp.app, locate(mp.app || '?', '?')-1)) ) ) as UserValide
+                //, ( select count(distinct um.codeMenu) from sgsMenu m join sgsUser_Menu um on m.codeMenu=um.codeMenu and ( codeUser = lCodeUser or fnDeveloppeur(lcodeUser)>0  ) where isnull(m.app, '') = lURL ) as UserValide
+                , fnDeveloppeur(lCodeUser) dev
+        ) rr ;
+    				
+        if isnull(lTemp, '') != '' then 
+            set lHTML = lTemp ; 
+            set lHTML = '<body><div  style="background:white;color:black;width:500px;height:200px;"><%lTemp%></div></body>' ;
+        	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+        
+        	Select	lHTML ;
+        	return ;
+            
+        else
+        	begin try
+        		 Execute Immediate 'Select <%lURL%>() Into lHTML' ;
+        		 Update webConnexion Set TCPIP = lTCPIP, LastAccess = now(), LastApp = lURL Where codeConnect = sessionID ;
+            end try
+            begin catch 
+                set lTemp = 'La page <%lURL%> a genéré une erreur : ' || error_message() ;
+            end catch ;
+        end if ;
+        if lTemp != '' then
+            call sqlmessage('@@ : <%lURL%>=<%lTemp%>|') ;
+        end if ;
+    elseif lURL = 'BLAccueil' then
+        Execute Immediate 'Select <%lURL%>() Into lHTML' ;
+        
+    else
+		set lHTML = '<body><div  style="background:white;color:black;width:500px;height:200px;">404 - Page non trouvée <%sessionID%></div></body>'
+    end if ;
+
+    select 'cSession=<%string(scanCode, clientuuid, dateformat(connectTime, 'yymmddhhmmsssss'))%>;cApache=<%sessionID%>;' into lCookie from webconnexion where codeConnect = sessionID ;
+
+    If IsNull(sessionID, 0)>1 And IsNull(@Cookie, '') != IsNull(lCookie, '') Then
+        Call sa_set_http_header( 'Set-Cookie', lCookie ) ;
+	End If ;
+	Call dbo.sa_set_http_header( 'content-type', 'text/html' );
+
+	Select	lHTML ;
+End
